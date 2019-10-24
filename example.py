@@ -2,6 +2,11 @@ from math import sin
 
 from tensorflow import keras
 import tensorflow as tf
+import pandas as pd
+import numpy as np
+
+df = pd.read_csv('./cleared_t_i_v.csv')
+data = df.values
 
 R = 1000
 L = 0.001
@@ -16,18 +21,20 @@ nn.compile(optimizer='adam',
               loss='sparse_categorical_crossentropy',
               metrics=['accuracy'])
 
-t = tf.constant(1.0, shape=(1,1))
+t = tf.constant(1.0, shape=(1, 1))
 
 # https://www.tensorflow.org/tutorials/customization/autodiff
 # https://www.tensorflow.org/api_docs/python/tf/gradients
 with tf.GradientTape() as gt:
   gt.watch(t)
-  z = nn.predict(t, steps=1)
+  z = 2*t
+  # z = nn.predict(t, steps=1)
 
 # Derivative of z with respect to the original input tensor x
 dz_dx = gt.gradient(z, t)
 
 print(dz_dx)
+
 
 def v_in(t):
     return sin(100*t)
