@@ -21,14 +21,17 @@ nn.compile(optimizer='adam',
               loss='sparse_categorical_crossentropy',
               metrics=['accuracy'])
 
-t = tf.constant(1.0, shape=(1, 1))
+t = tf.constant(1.0, shape=(1,))
 
+# Links that may help to build the project
 # https://www.tensorflow.org/tutorials/customization/autodiff
 # https://www.tensorflow.org/api_docs/python/tf/gradients
+# https://www.tensorflow.org/guide/eager
+# https://github.com/maziarraissi/PINNs/blob/master/main/continuous_time_inference%20(Schrodinger)/Schrodinger.py
+
 with tf.GradientTape() as gt:
-  gt.watch(t)
-  z = 2*t
-  # z = nn.predict(t, steps=1)
+  z = nn.predict(t)  # The error here occurs because not every operation inside 'predict' is gradient defined
+
 
 # Derivative of z with respect to the original input tensor x
 dz_dx = gt.gradient(z, t)
