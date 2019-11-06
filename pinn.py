@@ -1,8 +1,9 @@
 import tensorflow as tf
 import numpy as np
 import time
+from scipy import optimize
 
-class PhysicsInformedNN:
+class CircuitPINN:
     # Initialize the class
     def __init__(self, t0, v0, i0, R, L, layers):
 
@@ -30,21 +31,31 @@ class PhysicsInformedNN:
         self.v0_f_tf = tf.constant([self.v0_f], dtype=tf.float32)
 
         # tf Graphs
-        self.i_pred = self.net_i(tf.slice(self.t0_tf, [0, 0], [1, 1]))
-        self.f_i_pred = self.net_f_i(tf.slice(self.t0_f_tf, [0, 0], [1, 1]), tf.slice(self.t0_f_tf, [0, 0], [1, 1]))
+        i_pred_list = []
+        f_i_pred_list = []
+
+        for j in range(self.t0_tf.shape[1]):
+            item_i_pred = self.net_i(tf.slice(self.t0_tf, [0, j], [1, 1]))
+            i_pred_list.append(item_i_pred[0][0].numpy())
+        for j in range(self.t0_f_tf.shape[1]):
+            item_f_i_pred = self.net_f_i(tf.slice(self.t0_f_tf, [0, j], [1, 1]), tf.slice(self.v0_f_tf, [0, j], [1, 1]))
+            f_i_pred_list.append(item_f_i_pred[0][0].numpy())
+
+        self.i_pred = tf.constant([i_pred_list])
+        self.f_i_pred = tf.constant([f_i_pred_list])
 
         # Loss
         self.loss = tf.reduce_mean(tf.square(self.i0_tf - self.i_pred)) + \
                     tf.reduce_mean(tf.square(self.f_i_pred))
 
         # Optimizers
-        self.optimizer = tf.opt.ScipyOptimizerInterface(self.loss,
-                                                                method='L-BFGS-B',
-                                                                options={'maxiter': 50000,
-                                                                         'maxfun': 50000,
-                                                                         'maxcor': 50,
-                                                                         'maxls': 50,
-                                                                         'ftol': 1.0 * np.finfo(float).eps})
+        # self.optimizer = tf.contrib.opt.ScipyOptimizerInterface(self.loss,
+        #                                                         method='L-BFGS-B',
+        #                                                         options={'maxiter': 50000,
+        #                                                                  'maxfun': 50000,
+        #                                                                  'maxcor': 50,
+        #                                                                  'maxls': 50,
+        #                                                                  'ftol': 1.0 * np.finfo(float).eps})
 
         self.optimizer_Adam = tf.train.AdamOptimizer()
         self.train_op_Adam = self.optimizer_Adam.minimize(self.loss)
@@ -87,10 +98,6 @@ class PhysicsInformedNN:
 
     def net_i(self, t):
         return self.neural_net(t, self.weights, self.biases)
-        # i = []
-        # for j in range(t.shape[0]):
-        #     i.append(self.neural_net(tf.constant([[t[j]]], dtype=tf.float32), self.weights, self.biases))
-        # return tf.stack(i)
 
     def net_f_i(self, t, v):
         with tf.GradientTape() as gt:

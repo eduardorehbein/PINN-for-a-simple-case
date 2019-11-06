@@ -1,5 +1,5 @@
 from math import sin
-from pinn import PhysicsInformedNN
+from pinn import CircuitPINN
 
 import tensorflow as tf
 import pandas as pd
@@ -28,7 +28,7 @@ L = 0.001
 
 layers = [1, 5, 1]
 
-pinn = PhysicsInformedNN(t0, v0, i0, R, L, layers)
+pinn = CircuitPINN(t0, v0, i0, R, L, layers)
 
 # nn = keras.Sequential([
 #     keras.layers.Dense(5, activation='tanh', input_shape=(1,)),
