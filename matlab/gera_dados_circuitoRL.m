@@ -26,4 +26,5 @@ for j = 1:100
 end
 
 % Prints data to csv
-csvwrite('t_i_v.csv', data);
+headers = {'t','i','v'};
+csvwrite('t_i_v.csv', data, headers);

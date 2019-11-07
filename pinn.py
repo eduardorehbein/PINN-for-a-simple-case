@@ -3,77 +3,29 @@ import numpy as np
 import time
 from scipy import optimize
 
+# TODO: Improve it basing on https://github.com/pierremtb/PINNs-TF2.0/blob/master/utils/neuralnetwork.py
+
 class CircuitPINN:
-    # Initialize the class
-    def __init__(self, t0, v0, i0, R, L, layers):
 
-        # Data for MSEf
-        self.t0_f = t0[50:]
-        self.v0_f = v0[50:]
-
-        # Data for MSEu
-        self.t0 = t0[:50]
-        self.i0 = i0[:50]
-
+    def __init__(self, R, L, hidden_layers):
+        # Circuit parameters
         self.R = R  # Resistance
-        self.L = L  # Indutance
+        self.L = L  # Inductance
 
-        # Initialize NNs
-        self.layers = layers
-        self.weights, self.biases = self.initialize_NN(layers)
+        # Initialize NN
+        self.layers = [1] + hidden_layers + [1]
+        self.weights, self.biases = self.initialize_NN(self.layers)
 
-        # tf Placeholders
-        self.t0_tf = tf.constant([self.t0], dtype=tf.float32)
-
-        self.i0_tf = tf.constant([self.i0], dtype=tf.float32)
-
-        self.t0_f_tf = tf.constant([self.t0_f], dtype=tf.float32)
-        self.v0_f_tf = tf.constant([self.v0_f], dtype=tf.float32)
-
-        # tf Graphs
-        i_pred_list = []
-        f_i_pred_list = []
-
-        for j in range(self.t0_tf.shape[1]):
-            item_i_pred = self.net_i(tf.slice(self.t0_tf, [0, j], [1, 1]))
-            i_pred_list.append(item_i_pred[0][0].numpy())
-        for j in range(self.t0_f_tf.shape[1]):
-            item_f_i_pred = self.net_f_i(tf.slice(self.t0_f_tf, [0, j], [1, 1]), tf.slice(self.v0_f_tf, [0, j], [1, 1]))
-            f_i_pred_list.append(item_f_i_pred[0][0].numpy())
-
-        self.i_pred = tf.constant([i_pred_list])
-        self.f_i_pred = tf.constant([f_i_pred_list])
-
-        # Loss
-        self.loss = tf.reduce_mean(tf.square(self.i0_tf - self.i_pred)) + \
-                    tf.reduce_mean(tf.square(self.f_i_pred))
-
-        # Optimizers
-        # self.optimizer = tf.contrib.opt.ScipyOptimizerInterface(self.loss,
-        #                                                         method='L-BFGS-B',
-        #                                                         options={'maxiter': 50000,
-        #                                                                  'maxfun': 50000,
-        #                                                                  'maxcor': 50,
-        #                                                                  'maxls': 50,
-        #                                                                  'ftol': 1.0 * np.finfo(float).eps})
-
-        self.optimizer_Adam = tf.train.AdamOptimizer()
-        self.train_op_Adam = self.optimizer_Adam.minimize(self.loss)
-
-        # tf session
-        self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True,
-                                                     log_device_placement=True))
-
-        init = tf.global_variables_initializer()
-        self.sess.run(init)
+        # Optimizer
+        self.optimizer = tf.optimizers.Adam()
 
     def initialize_NN(self, layers):
         weights = []
         biases = []
         num_layers = len(layers)
-        for l in range(0, num_layers - 1):
-            W = self.xavier_init(size=[layers[l], layers[l + 1]])
-            b = tf.Variable(tf.zeros([1, layers[l + 1]]), dtype=tf.float32)
+        for l in range(1, num_layers):
+            W = self.xavier_init(size=[layers[l], layers[l - 1]])
+            b = tf.Variable(tf.zeros([layers[l], 1]), dtype=tf.float32)
             weights.append(W)
             biases.append(b)
         return weights, biases
@@ -84,67 +36,53 @@ class CircuitPINN:
         xavier_stddev = np.sqrt(2 / (in_dim + out_dim))
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
-    def neural_net(self, t, weights, biases):
-        num_layers = len(weights) + 1
+    def i(self, t):
+        num_layers = len(self.weights) + 1
         U = t
         for l in range(0, num_layers - 2):
-            W = weights[l]
-            b = biases[l]
-            U = tf.tanh(tf.add(tf.matmul(U, W), b))
-        W = weights[-1]
-        b = biases[-1]
-        Y = tf.add(tf.matmul(U, W), b)
+            W = self.weights[l]
+            b = self.biases[l]
+            U = tf.tanh(tf.add(tf.matmul(self.weights[l], U), self.biases[l]))
+        W = self.weights[-1]
+        b = self.biases[-1]
+        Y = tf.add(tf.matmul(W, U), b)
         return Y
 
-    def net_i(self, t):
-        return self.neural_net(t, self.weights, self.biases)
-
-    def net_f_i(self, t, v):
-        with tf.GradientTape() as gt:
-            gt.watch(t)
-            i = self.net_i(t)
-        di_dt = gt.gradient(i, t)
+    def f(self, t, v):
+        # ODE: Ldi_dt = v - Ri
+        with tf.GradientTape() as gtf:
+            gtf.watch(t)
+            i = self.i(t)
+        di_dt = gtf.gradient(i, t)
 
         return di_dt + (self.R / self.L) * i - (1 / self.L) * v
 
-    def callback(self, loss):
-        print('Loss:', loss)
+    def train(self, train_t, train_i, train_v, epochs=1, train_f_percent=0.99):
+        # Data for f loss
+        train_f_index = int(train_f_percent * train_t.shape[1])
+        f_t_train = tf.constant(train_t[:, :train_f_index], dtype=tf.float32)
+        f_v_train = tf.constant(train_v[:, :train_f_index], dtype=tf.float32)
 
-    def train(self, nIter):
+        # Data for u loss
+        u_t_train = tf.constant(train_t[:, train_f_index:], dtype=tf.float32)
+        u_i_train = tf.constant(train_i[:, train_f_index:], dtype=tf.float32)
 
-        tf_dict = {self.x0_tf: self.x0, self.t0_tf: self.t0,
-                   self.u0_tf: self.u0, self.v0_tf: self.v0,
-                   self.x_lb_tf: self.x_lb, self.t_lb_tf: self.t_lb,
-                   self.x_ub_tf: self.x_ub, self.t_ub_tf: self.t_ub,
-                   self.x_f_tf: self.x_f, self.t_f_tf: self.t_f}
+        for j in range(epochs):
+            grad_weights, grad_biases = self.get_grads(f_t_train, f_v_train, u_i_train, u_t_train)
+            self.optimizer.apply_gradients([[grad_weights, grad_biases], [self.weights, self.biases]])
 
-        start_time = time.time()
-        for it in range(nIter):
-            self.sess.run(self.train_op_Adam, tf_dict)
+    def get_grads(self, f_t_train, f_v_train, u_i_train, u_t_train):
+        with tf.GradientTape(persistent=True) as gtu:
+            # gtu.watch(self.weights)  # Variables doesn't need to be watched
+            # gtu.watch(self.biases)
 
-            # Print
-            if it % 10 == 0:
-                elapsed = time.time() - start_time
-                loss_value = self.sess.run(self.loss, tf_dict)
-                print('It: %d, Loss: %.3e, Time: %.2f' %
-                      (it, loss_value, elapsed))
-                start_time = time.time()
+            u_i_predict = self.i(u_t_train)
+            u_loss = tf.reduce_mean(tf.square(u_i_predict - u_i_train))
 
-        self.optimizer.minimize(self.sess,
-                                feed_dict=tf_dict,
-                                fetches=[self.loss],
-                                loss_callback=self.callback)
+            f_predict = self.f(f_t_train, f_v_train)
+            f_loss = tf.reduce_mean(tf.square(f_predict))
 
-    def predict(self, X_star):
-
-        tf_dict = {self.x0_tf: X_star[:, 0:1], self.t0_tf: X_star[:, 1:2]}
-
-        u_star = self.sess.run(self.u0_pred, tf_dict)
-        v_star = self.sess.run(self.v0_pred, tf_dict)
-
-        tf_dict = {self.x_f_tf: X_star[:, 0:1], self.t_f_tf: X_star[:, 1:2]}
-
-        f_u_star = self.sess.run(self.f_u_pred, tf_dict)
-        f_v_star = self.sess.run(self.f_v_pred, tf_dict)
-
-        return u_star, v_star, f_u_star, f_v_star
+            total_loss = u_loss + f_loss
+        grad_weights = gtu.gradient(self.weights, total_loss)
+        grad_biases = gtu.gradient(self.biases, total_loss)
+        return grad_weights, grad_biases
