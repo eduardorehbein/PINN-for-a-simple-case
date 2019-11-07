@@ -27,6 +27,6 @@ hidden_layers = [5, 5]
 circuit = CircuitPINN(R, L, hidden_layers)
 
 # PINN training
-circuit.train(train_t, train_i, train_v)
+circuit.train(train_t, train_i, train_v, epochs=1000)
 
 # PINN validating

@@ -69,13 +69,12 @@ class CircuitPINN:
 
         for j in range(epochs):
             grad_weights, grad_biases = self.get_grads(f_t_train, f_v_train, u_i_train, u_t_train)
-            self.optimizer.apply_gradients([[grad_weights, grad_biases], [self.weights, self.biases]])
+            grads = grad_weights + grad_biases
+            vars = self.weights + self.biases
+            self.optimizer.apply_gradients(zip(grads, vars))
 
     def get_grads(self, f_t_train, f_v_train, u_i_train, u_t_train):
         with tf.GradientTape(persistent=True) as gtu:
-            # gtu.watch(self.weights)  # Variables doesn't need to be watched
-            # gtu.watch(self.biases)
-
             u_i_predict = self.i(u_t_train)
             u_loss = tf.reduce_mean(tf.square(u_i_predict - u_i_train))
 
@@ -83,6 +82,7 @@ class CircuitPINN:
             f_loss = tf.reduce_mean(tf.square(f_predict))
 
             total_loss = u_loss + f_loss
-        grad_weights = gtu.gradient(self.weights, total_loss)
-        grad_biases = gtu.gradient(self.biases, total_loss)
+        grad_weights = gtu.gradient(total_loss, self.weights)
+        grad_biases = gtu.gradient(total_loss, self.biases)
+
         return grad_weights, grad_biases
