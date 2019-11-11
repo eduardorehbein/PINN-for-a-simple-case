@@ -7,7 +7,7 @@ from scipy import optimize
 
 class CircuitPINN:
 
-    def __init__(self, R, L, hidden_layers):
+    def __init__(self, R, L, hidden_layers, learning_rate):
         # Circuit parameters
         self.R = R  # Resistance
         self.L = L  # Inductance
@@ -17,7 +17,7 @@ class CircuitPINN:
         self.weights, self.biases = self.initialize_NN(self.layers)
 
         # Optimizer
-        self.optimizer = tf.optimizers.Adam()
+        self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
 
     def initialize_NN(self, layers):
         weights = []
@@ -36,13 +36,17 @@ class CircuitPINN:
         xavier_stddev = np.sqrt(2 / (in_dim + out_dim))
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
+    def predict(self, numpy_or_list_t):
+        t = tf.constant(numpy_or_list_t, dtype=tf.float32)
+        return self.i(t)
+
     def i(self, t):
         num_layers = len(self.weights) + 1
         U = t
         for l in range(0, num_layers - 2):
             W = self.weights[l]
             b = self.biases[l]
-            U = tf.tanh(tf.add(tf.matmul(self.weights[l], U), self.biases[l]))
+            U = tf.tanh(tf.add(tf.matmul(W, U), b))
         W = self.weights[-1]
         b = self.biases[-1]
         Y = tf.add(tf.matmul(W, U), b)
