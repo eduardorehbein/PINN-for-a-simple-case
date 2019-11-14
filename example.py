@@ -16,7 +16,7 @@ v = np.array([df['v'].values])
 # PINN instancing
 R = 3
 L = 3
-hidden_layers = [9]
+hidden_layers = [9, 9]
 learning_rate = 0.001
 
 circuit = CircuitPINN(R, L, hidden_layers, learning_rate)
