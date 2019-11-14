@@ -1,45 +1,44 @@
-from math import sin
+from pinn import CircuitPINN
 
-from tensorflow import keras
+import pandas as pd
+import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
-R = 1000
-L = 0.001
+# Data reading
+df = pd.read_csv('./cleared_t_i_v.csv')
+# df = (df-df.mean())/df.std() # Normalizing
 
-nn = keras.Sequential([
-    keras.layers.Dense(5, activation='tanh', input_shape=(1,)),
-    keras.layers.Dense(5, activation='tanh'),
-    keras.layers.Dense(1, activation='tanh')  # i(t)
-    # keras.layers.Dense(1, activation='custom') f(t, v)
-])
-nn.compile(optimizer='adam',
-              loss='sparse_categorical_crossentropy',
-              metrics=['accuracy'])
+t = np.array([df['t'].values])
+i = np.array([df['i'].values])
+v = np.array([df['v'].values])
 
-t = tf.constant(1.0, shape=(1,1))
+# PINN instancing
+R = 3
+L = 3
+hidden_layers = [9, 9]
+learning_rate = 0.001
 
-# https://www.tensorflow.org/tutorials/customization/autodiff
-# https://www.tensorflow.org/api_docs/python/tf/gradients
-with tf.GradientTape() as gt:
-  gt.watch(t)
-  z = nn.predict(t, steps=1)
+circuit = CircuitPINN(R, L, hidden_layers, learning_rate)
 
-# Derivative of z with respect to the original input tensor x
-dz_dx = gt.gradient(z, t)
+# PINN training
+circuit.train(t, i, v, epochs=20000)
 
-print(dz_dx)
+# PINN testing
+ordered_df = df.sort_values(by=['t'])
+ordered_t = np.array([ordered_df['t'].values])
+ordered_i = np.array([ordered_df['i'].values])
 
-def v_in(t):
-    return sin(100*t)
+prediction = circuit.predict(ordered_t)
+print('MSE da predição com os dados de treino no teste',
+      tf.reduce_mean(tf.square(tf.constant(ordered_i, dtype=tf.float32) - prediction)))
 
+# Plot the data
+plt.plot(ordered_t[0], prediction.numpy()[0], label='Predicted')
+plt.plot(ordered_t[0], ordered_i[0], label='Sampled')
 
-def i(t):
-    return nn.predict([t])
+# Add a legend
+plt.legend()
 
-
-def di_dt(t):
-    return t
-
-
-def f(t, v):
-    return di_dt(t) + (R/L)*i(t) - (1/L)*v(t)
+# Show the plot
+plt.show()
