@@ -1,12 +1,10 @@
 import tensorflow as tf
 import numpy as np
-import time
-from scipy import optimize
 
 # TODO: Improve it basing on https://github.com/pierremtb/PINNs-TF2.0/blob/master/utils/neuralnetwork.py
 
-class CircuitPINN:
 
+class CircuitPINN:
     def __init__(self, R, L, hidden_layers, learning_rate):
         # Circuit parameters
         self.R = R  # Resistance
@@ -28,16 +26,19 @@ class CircuitPINN:
             b = tf.Variable(tf.zeros([layers[l], 1]), dtype=tf.float32)
             weights.append(W)
             biases.append(b)
+
         return weights, biases
 
     def xavier_init(self, size):
         in_dim = size[0]
         out_dim = size[1]
         xavier_stddev = np.sqrt(2 / (in_dim + out_dim))
+
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
     def predict(self, numpy_or_list_t):
         t = tf.constant(numpy_or_list_t, dtype=tf.float32)
+
         return self.i(t)
 
     def i(self, t):
@@ -50,6 +51,7 @@ class CircuitPINN:
         W = self.weights[-1]
         b = self.biases[-1]
         Y = tf.add(tf.matmul(W, U), b)
+
         return Y
 
     def f(self, t, v):
@@ -72,10 +74,13 @@ class CircuitPINN:
         u_i_train = tf.constant(train_i[:, train_f_index:], dtype=tf.float32)
 
         for j in range(epochs):
+            # Gradients
             grad_weights, grad_biases = self.get_grads(f_t_train, f_v_train, u_i_train, u_t_train)
+
+            # Updating weights and biases
             grads = grad_weights + grad_biases
-            vars = self.weights + self.biases
-            self.optimizer.apply_gradients(zip(grads, vars))
+            vars_to_update = self.weights + self.biases
+            self.optimizer.apply_gradients(zip(grads, vars_to_update))
 
     def get_grads(self, f_t_train, f_v_train, u_i_train, u_t_train):
         with tf.GradientTape(persistent=True) as gtu:

@@ -3,9 +3,15 @@ clear all
 clc
 
 % Sets parameters
-R = 1e3;
-L = 1e-3;
-simTime = 50;
+R = 3;
+L = 3;
+
+simTime = 12;
+simStepSize = 0.001;
+
+stepTime = 6;
+v0 = 10;
+vf = 0;
 
 % Instances data variable
 % data = [0 0 0];
@@ -25,11 +31,7 @@ simTime = 50;
 %     % Populates data variable
 %     data = [data; i.Time i.Data v.Data];
 % end
-
-v_p = 10;
-omega = 100;
-
-sim('circuito_RL');
+sim('circuito_RL')
 
 data = [i.Time i.Data v.Data];
 
@@ -39,4 +41,4 @@ headers = {'t','i','v'};
 
 T = array2table(data);
 T.Properties.VariableNames(1:3) = headers;
-writetable(T,'t_i_v_v2.csv');
+writetable(T,'t_i_v_v3.csv');
