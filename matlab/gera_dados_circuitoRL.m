@@ -40,8 +40,8 @@ plot(i)
 data = [i.Time i.Data v.Data];
 
 % Prints data to csv
-headers = {'t','i','v'};
-% csvwrite('t_i_v.csv', data, headers);
+headers = {'t','noisy_i','v'};
+% headers = {'t','i','v'};
 
 T = array2table(data);
 T.Properties.VariableNames(1:3) = headers;
