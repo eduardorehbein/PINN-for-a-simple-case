@@ -7,8 +7,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 
 # Data reading
-noisy_df = pd.read_csv('./matlab/noisy_t_i_v_v3.csv')
-noisy_df.drop(columns='v')
+noisy_df = pd.read_csv('./matlab/noisy_t_i_v_v3.csv').drop(columns=['v'])
 df = pd.read_csv('./matlab/t_i_v_v3.csv')
 df = df.join(noisy_df.set_index('t'), on='t')
 shuffled_df = df.sample(frac=1)
@@ -17,12 +16,14 @@ shuffled_df = df.sample(frac=1)
 train_u_percent = 0.01
 u_data_len = int(train_u_percent * len(shuffled_df))
 u_df = shuffled_df.sample(n=u_data_len)
-f_df = shuffled_df - u_df
+f_df = shuffled_df[~shuffled_df.isin(u_df)].dropna()
 
-np_u_t = np.array([u_df['t'].values])
-np_u_i = np.array([u_df['noisy_i'].values])
-np_f_t = np.array([f_df['t'].values])
-np_f_v = np.array([f_df['v'].values])
+np_u_t = u_df['t'].values
+np_u_i = u_df['noisy_i'].values
+np_noiseless_u_i = u_df['i'].values
+np_f_t = f_df['t'].values
+np_f_v = f_df['v'].values
+np_f_i = f_df['i'].values
 
 # PINN instancing
 R = 3
@@ -34,20 +35,20 @@ model = CircuitPINN(R, L, hidden_layers, learning_rate)
 # PINN validation
 validator = CircuitCrossValidator()
 epochs = 2000
-validator.validate(model, epochs, np_u_t, np_u_i, np_f_t, np_f_v)
+validator.validate(model, epochs, np_u_t, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
 
 # PINN final training  TODO: Update train usage here
 # model.train(np_t, np_i, np_v, epochs=epochs)
 
 # PINN: i response in time
-ordered_t = np.array([df['t'].values])
-ordered_i = np.array([df['i'].values])
+np_ordered_t = df['t'].values
+np_ordered_i = df['i'].values
 
-prediction = model.predict(ordered_t)
+np_prediction = model.predict(np_ordered_t)
 
 # Plot the data
-plt.plot(ordered_t[0], prediction.numpy()[0], label='Predicted')
-plt.plot(ordered_t[0], ordered_i[0], label='Sampled')
+plt.plot(np_ordered_t, np_prediction, label='Predicted')
+plt.plot(np_ordered_t, np_ordered_i, label='Sampled')
 
 # Add a legend
 plt.legend()
