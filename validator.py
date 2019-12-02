@@ -1,5 +1,6 @@
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
 
 
 class CircuitCrossValidator:
@@ -13,27 +14,32 @@ class CircuitCrossValidator:
         initial_weights = copy.deepcopy(model.weights)
         initial_biases = copy.deepcopy(model.biases)
 
-        accuracies = list()
+        mses = list()
         for index in range(len(data_sets)):
             test_data = data_sets[index]
-            train_data = [data_set for data_set in data_sets if data_set != test_data]
 
-            model.train(*train_data[:-2], epochs)
-            np_test_t = np.array(test_data[0] + test_data[2])
-            np_test_i = np.array(test_data[-1] + test_data[-2])
+            train_data_sets = data_sets[:index] + data_sets[index+1:]
+            train_data = [np.array([]), np.array([]), np.array([]), np.array([])]
+            for train_data_set in train_data_sets:
+                for j, data in enumerate(train_data_set):
+                    if j < 4:
+                        train_data[j] = np.append(train_data[j], data)
+            model.train(*train_data, epochs)
+            np_test_t = np.append(test_data[0], test_data[2])
+            np_test_i = np.append(test_data[-1], test_data[-2])
             np_prediction = model.predict(np_test_t)
 
-            accuracy = np.mean(np.abs((np_test_i - np_prediction)/np_test_i))
-            accuracies.append(accuracy)
+            mse = np.mean(np.square(np_prediction - np_test_i))
+            mses.append(mse)
 
             model.weights = initial_weights
             model.biases = initial_biases
 
-        np_accuracies = np.array(accuracies)
-        mean = np_accuracies.mean(0)
-        repeatability = self.t_student()*np_accuracies.std(0)
+        np_mses = np.array(mses)
+        mean = np_mses.mean(0)
+        repeatability = self.t_student()*np_mses.std(0)
 
-        print('Mean error: [', 100*(mean - repeatability), '% -', 100*(mean + repeatability), '%]')
+        print('MSE error: [', mean - repeatability, '-', mean + repeatability, ']')
 
     def split(self, np_u_t, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i):
         return list(zip(np.array_split(np_u_t, self.n_sections),
