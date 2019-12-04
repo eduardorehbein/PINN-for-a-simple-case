@@ -32,8 +32,8 @@ class CircuitCrossValidator:
             mse = np.mean(np.square(np_prediction - np_test_i))
             mses.append(mse)
 
-            model.weights = initial_weights
-            model.biases = initial_biases
+            model.weights = copy.deepcopy(initial_weights)
+            model.biases = copy.deepcopy(initial_biases)
 
         np_mses = np.array(mses)
         mean = np_mses.mean(0)
