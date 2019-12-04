@@ -14,7 +14,8 @@ class CircuitCrossValidator:
         initial_weights = copy.deepcopy(model.weights)
         initial_biases = copy.deepcopy(model.biases)
 
-        mses = list()
+        r2s = list()
+        predictions = list()
         for index in range(len(data_sets)):
             test_data = data_sets[index]
 
@@ -28,18 +29,28 @@ class CircuitCrossValidator:
             np_test_t = np.append(test_data[0], test_data[2])
             np_test_i = np.append(test_data[-1], test_data[-2])
             np_prediction = model.predict(np_test_t)
+            predictions.append((np_test_t, np_prediction))
 
-            mse = np.mean(np.square(np_prediction - np_test_i))
-            mses.append(mse)
+            np_sum_1 = np.sum(np.square(np_test_i - np_prediction))
+            np_sum_2 = np.sum(np.square(np_test_i - np.mean(np_test_i)))
+            r2 = 1 - np_sum_1 / np_sum_2
+            print('R2 for test index =', index, '->', r2)
+            r2s.append(r2)
 
             model.weights = copy.deepcopy(initial_weights)
             model.biases = copy.deepcopy(initial_biases)
 
-        np_mses = np.array(mses)
-        mean = np_mses.mean(0)
-        repeatability = self.t_student()*np_mses.std(0)
+        np_r2s = np.array(r2s)
+        r2s_mean = np_r2s.mean(0)
+        r2s_repeatability = self.t_student()*np_r2s.std(0)
 
-        print('MSE error: [', mean - repeatability, '-', mean + repeatability, ']')
+        print('R2 correlation factor: [', r2s_mean - r2s_repeatability, '-', r2s_mean + r2s_repeatability, ']')
+
+        return_t_pred = [np.array([]), np.array([])]
+        for np_t, np_pred in predictions:
+            return_t_pred[0] = np.append(return_t_pred[0], np_t)
+            return_t_pred[1] = np.append(return_t_pred[1], np_pred)
+        return return_t_pred
 
     def split(self, np_u_t, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i):
         return list(zip(np.array_split(np_u_t, self.n_sections),

@@ -2,6 +2,7 @@ from pinn import CircuitPINN
 from validator import CircuitCrossValidator
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
 # Data reading
@@ -31,12 +32,14 @@ learning_rate = 0.001
 model = CircuitPINN(R, L, hidden_layers, learning_rate)
 
 # PINN validation
-validator = CircuitCrossValidator()
-epochs = 2000
-validator.validate(model, epochs, np_u_t, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
+validator = CircuitCrossValidator(4)
+epochs = 4000
+ts_and_preds = validator.validate(model, epochs, np_u_t, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
+np_ts = np.sort(ts_and_preds[0])
+np_preds = np.sort(ts_and_preds[1])  # This sort is wrong, it has to be sorted based on t sort
 
-# PINN final training  TODO: Update train usage here
-# model.train(np_t, np_i, np_v, epochs=epochs)
+# PINN final training
+# model.train(np_u_t, np_u_i, np_f_t, np_f_v, epochs=epochs)
 
 # PINN: i response in time
 np_ordered_t = df['t'].values
@@ -45,8 +48,9 @@ np_ordered_i = df['i'].values
 np_prediction = model.predict(np_ordered_t)
 
 # Plot the data
-plt.plot(np_ordered_t, np_prediction, label='Predicted')
+# plt.plot(np_ordered_t, np_prediction, label='Predicted')
 plt.plot(np_ordered_t, np_ordered_i, label='Sampled')
+plt.plot(np_ts, np_preds, label='Predicted')
 
 # Add a legend
 plt.legend()
