@@ -2,8 +2,6 @@ from pinn import CircuitPINN
 from validator import CircuitCrossValidator
 
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
 # Data reading
 noisy_df = pd.read_csv('./matlab/noisy_t_i_v_v3.csv').drop(columns=['v'])
@@ -17,6 +15,7 @@ u_data_len = int(train_u_percent * len(shuffled_df))
 u_df = shuffled_df.sample(n=u_data_len)
 f_df = shuffled_df[~shuffled_df.isin(u_df)].dropna()
 
+# Converting to numpy data
 np_u_t = u_df['t'].values
 np_u_i = u_df['noisy_i'].values
 np_noiseless_u_i = u_df['i'].values
@@ -27,33 +26,13 @@ np_f_i = f_df['i'].values
 # PINN instancing
 R = 3
 L = 3
-hidden_layers = [9]
+hidden_layers = [9, 9]
 learning_rate = 0.001
 model = CircuitPINN(R, L, hidden_layers, learning_rate)
 
 # PINN validation
-validator = CircuitCrossValidator(4)
+n_sections = 4
 epochs = 4000
-ts_and_preds = validator.validate(model, epochs, np_u_t, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
-np_ts = np.sort(ts_and_preds[0])
-np_preds = np.sort(ts_and_preds[1])  # This sort is wrong, it has to be sorted based on t sort
 
-# PINN final training
-# model.train(np_u_t, np_u_i, np_f_t, np_f_v, epochs=epochs)
-
-# PINN: i response in time
-np_ordered_t = df['t'].values
-np_ordered_i = df['i'].values
-
-np_prediction = model.predict(np_ordered_t)
-
-# Plot the data
-# plt.plot(np_ordered_t, np_prediction, label='Predicted')
-plt.plot(np_ordered_t, np_ordered_i, label='Sampled')
-plt.plot(np_ts, np_preds, label='Predicted')
-
-# Add a legend
-plt.legend()
-
-# Show the plot
-plt.show()
+validator = CircuitCrossValidator(n_sections)
+validator.validate(model, epochs, np_u_t, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)

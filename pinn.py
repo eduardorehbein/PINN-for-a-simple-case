@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
+# TODO: Make v(t) an input of the NN
 # TODO: Improve it basing on https://github.com/pierremtb/PINNs-TF2.0/blob/master/utils/neuralnetwork.py
 
 
