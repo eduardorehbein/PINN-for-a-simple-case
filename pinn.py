@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
+# TODO: Make v(t) an input of the NN
 # TODO: Improve it basing on https://github.com/pierremtb/PINNs-TF2.0/blob/master/utils/neuralnetwork.py
 
 
@@ -36,62 +37,62 @@ class CircuitPINN:
 
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
-    def predict(self, numpy_or_list_t):
-        t = tf.constant(numpy_or_list_t, dtype=tf.float32)
+    def predict(self, np_t):
+        tf_t = tf.constant(np.array([np_t]), dtype=tf.float32)
+        tf_i = self.i(tf_t)
 
-        return self.i(t)
+        return tf_i.numpy()[0]
 
-    def i(self, t):
+    def i(self, tf_t):
         num_layers = len(self.weights) + 1
-        U = t
+        tf_U = tf_t
         for l in range(0, num_layers - 2):
-            W = self.weights[l]
-            b = self.biases[l]
-            U = tf.tanh(tf.add(tf.matmul(W, U), b))
-        W = self.weights[-1]
-        b = self.biases[-1]
-        Y = tf.add(tf.matmul(W, U), b)
+            tf_W = self.weights[l]
+            tf_b = self.biases[l]
+            tf_U = tf.tanh(tf.add(tf.matmul(tf_W, tf_U), tf_b))
+        tf_W = self.weights[-1]
+        tf_b = self.biases[-1]
+        tf_Y = tf.add(tf.matmul(tf_W, tf_U), tf_b)
 
-        return Y
+        return tf_Y
 
-    def f(self, t, v):
-        # ODE: Ldi_dt = v - Ri
+    def f(self, tf_t, tf_v):
+        # ODE: Ldi_dt + Ri = v
         with tf.GradientTape() as gtf:
-            gtf.watch(t)
-            i = self.i(t)
-        di_dt = gtf.gradient(i, t)
+            gtf.watch(tf_t)
+            tf_i = self.i(tf_t)
+        tf_di_dt = gtf.gradient(tf_i, tf_t)
 
-        return di_dt + (self.R / self.L) * i - (1 / self.L) * v
+        return tf_di_dt + (self.R / self.L) * tf_i - (1 / self.L) * tf_v
 
-    def train(self, train_t, train_i, train_v, epochs=1, train_f_percent=0.99):
-        # Data for f loss
-        train_f_index = int(train_f_percent * train_t.shape[1])
-        f_t_train = tf.constant(train_t[:, :train_f_index], dtype=tf.float32)
-        f_v_train = tf.constant(train_v[:, :train_f_index], dtype=tf.float32)
-
+    def train(self, np_u_t, np_u_i, np_f_t, np_f_v, epochs=1):
         # Data for u loss
-        u_t_train = tf.constant(train_t[:, train_f_index:], dtype=tf.float32)
-        u_i_train = tf.constant(train_i[:, train_f_index:], dtype=tf.float32)
+        tf_u_t = tf.constant(np.array([np_u_t]), dtype=tf.float32)
+        tf_u_i = tf.constant(np.array([np_u_i]), dtype=tf.float32)
+
+        # Data for f loss
+        tf_f_t = tf.constant(np.array([np_f_t]), dtype=tf.float32)
+        tf_f_v = tf.constant(np.array([np_f_v]), dtype=tf.float32)
 
         for j in range(epochs):
             # Gradients
-            grad_weights, grad_biases = self.get_grads(f_t_train, f_v_train, u_i_train, u_t_train)
+            grad_weights, grad_biases = self.get_grads(tf_u_t, tf_u_i, tf_f_t, tf_f_v)
 
             # Updating weights and biases
             grads = grad_weights + grad_biases
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
 
-    def get_grads(self, f_t_train, f_v_train, u_i_train, u_t_train):
+    def get_grads(self, tf_u_t, tf_u_i, tf_f_t, tf_f_v):
         with tf.GradientTape(persistent=True) as gtu:
-            u_i_predict = self.i(u_t_train)
-            u_loss = tf.reduce_mean(tf.square(u_i_predict - u_i_train))
+            tf_u_i_predict = self.i(tf_u_t)
+            tf_u_loss = tf.reduce_mean(tf.square(tf_u_i_predict - tf_u_i))
 
-            f_predict = self.f(f_t_train, f_v_train)
-            f_loss = tf.reduce_mean(tf.square(f_predict))
+            tf_f_predict = self.f(tf_f_t, tf_f_v)
+            tf_f_loss = tf.reduce_mean(tf.square(tf_f_predict))
 
-            total_loss = u_loss + f_loss
-        grad_weights = gtu.gradient(total_loss, self.weights)
-        grad_biases = gtu.gradient(total_loss, self.biases)
+            tf_total_loss = tf_u_loss + tf_f_loss
+        grad_weights = gtu.gradient(tf_total_loss, self.weights)
+        grad_biases = gtu.gradient(tf_total_loss, self.biases)
 
         return grad_weights, grad_biases
