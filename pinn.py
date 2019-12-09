@@ -12,7 +12,7 @@ class CircuitPINN:
         self.L = L  # Inductance
 
         # Initialize NN
-        self.layers = [1] + hidden_layers + [1]
+        self.layers = [2] + hidden_layers + [1]
         self.weights, self.biases = self.initialize_NN(self.layers)
 
         # Optimizer
@@ -37,15 +37,15 @@ class CircuitPINN:
 
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
-    def predict(self, np_t):
-        tf_t = tf.constant(np.array([np_t]), dtype=tf.float32)
+    def predict(self, np_t, np_v):
+        tf_t = tf.constant(np.array([np_t, np_v]), dtype=tf.float32)
         tf_i = self.i(tf_t)
 
         return tf_i.numpy()[0]
 
-    def i(self, tf_t):
+    def i(self, tf_nn_input):
         num_layers = len(self.weights) + 1
-        tf_U = tf_t
+        tf_U = tf_nn_input
         for l in range(0, num_layers - 2):
             tf_W = self.weights[l]
             tf_b = self.biases[l]
@@ -56,39 +56,40 @@ class CircuitPINN:
 
         return tf_Y
 
-    def f(self, tf_t, tf_v):
+    def f(self, tf_nn_input, tf_v):
         # ODE: Ldi_dt + Ri = v
         with tf.GradientTape() as gtf:
-            gtf.watch(tf_t)
-            tf_i = self.i(tf_t)
-        tf_di_dt = gtf.gradient(tf_i, tf_t)
+            gtf.watch(tf_nn_input)
+            tf_i = self.i(tf_nn_input)
+        tf_di_dinput = gtf.gradient(tf_i, tf_nn_input)
+        tf_di_dt = tf.slice(tf_di_dinput, [0, 0], [1, tf_di_dinput.shape[1]])
 
         return tf_di_dt + (self.R / self.L) * tf_i - (1 / self.L) * tf_v
 
-    def train(self, np_u_t, np_u_i, np_f_t, np_f_v, epochs=1):
+    def train(self, np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, epochs=1):
         # Data for u loss
-        tf_u_t = tf.constant(np.array([np_u_t]), dtype=tf.float32)
+        tf_u_nn_input = tf.constant(np.array([np_u_t, np_u_v]), dtype=tf.float32)
         tf_u_i = tf.constant(np.array([np_u_i]), dtype=tf.float32)
 
         # Data for f loss
-        tf_f_t = tf.constant(np.array([np_f_t]), dtype=tf.float32)
+        tf_f_nn_input = tf.constant(np.array([np_f_t, np_f_v]), dtype=tf.float32)
         tf_f_v = tf.constant(np.array([np_f_v]), dtype=tf.float32)
 
         for j in range(epochs):
             # Gradients
-            grad_weights, grad_biases = self.get_grads(tf_u_t, tf_u_i, tf_f_t, tf_f_v)
+            grad_weights, grad_biases = self.get_grads(tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v)
 
             # Updating weights and biases
             grads = grad_weights + grad_biases
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
 
-    def get_grads(self, tf_u_t, tf_u_i, tf_f_t, tf_f_v):
+    def get_grads(self, tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v):
         with tf.GradientTape(persistent=True) as gtu:
-            tf_u_i_predict = self.i(tf_u_t)
+            tf_u_i_predict = self.i(tf_u_nn_input)
             tf_u_loss = tf.reduce_mean(tf.square(tf_u_i_predict - tf_u_i))
 
-            tf_f_predict = self.f(tf_f_t, tf_f_v)
+            tf_f_predict = self.f(tf_f_nn_input, tf_f_v)
             tf_f_loss = tf.reduce_mean(tf.square(tf_f_predict))
 
             tf_total_loss = tf_u_loss + tf_f_loss

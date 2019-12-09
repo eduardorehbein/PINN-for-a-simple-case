@@ -17,6 +17,7 @@ f_df = shuffled_df[~shuffled_df.isin(u_df)].dropna()
 
 # Converting to numpy data
 np_u_t = u_df['t'].values
+np_u_v = u_df['v'].values
 np_u_i = u_df['noisy_i'].values
 np_noiseless_u_i = u_df['i'].values
 np_f_t = f_df['t'].values
@@ -35,4 +36,4 @@ n_sections = 4
 epochs = 4000
 
 validator = CircuitCrossValidator(n_sections)
-validator.validate(model, epochs, np_u_t, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
+validator.validate(model, epochs, np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
