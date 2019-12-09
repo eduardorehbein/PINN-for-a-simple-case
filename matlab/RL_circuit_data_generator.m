@@ -7,17 +7,13 @@ R = 3;
 L = 3;
 
 simTime = 30;
-simStepSize = 1e-1;
-
-stepTime = 6;
-v0 = 10;
-vf = 0;
+simStepSize = 1e-2;
 
 noisePower = 1e-6;
 
 % Runs_simulation
-sim('circuito_RL_com_ruido')
-plot(i)
+sim('noisy_RL_circuit')
+plot(noisy_i)
 
 % Prints data to csv
 data = [i.Time v.Data i.Data noisy_i.Data];

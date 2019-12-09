@@ -4,9 +4,7 @@ from validator import CircuitCrossValidator
 import pandas as pd
 
 # Data reading
-noisy_df = pd.read_csv('./matlab/noisy_t_i_v_v3.csv').drop(columns=['v'])
-df = pd.read_csv('./matlab/t_i_v_v3.csv')
-df = df.join(noisy_df.set_index('t'), on='t')
+df = pd.read_csv('./matlab/noisy_t_i_v_v4.csv')
 shuffled_df = df.sample(frac=1)
 
 # Setting u data (real) and f data (simulated)
@@ -27,13 +25,13 @@ np_f_i = f_df['i'].values
 # PINN instancing
 R = 3
 L = 3
-hidden_layers = [9, 9]
+hidden_layers = [3, 3, 3]
 learning_rate = 0.001
 model = CircuitPINN(R, L, hidden_layers, learning_rate)
 
 # PINN validation
 n_sections = 4
-epochs = 4000
+epochs = 8000
 
 validator = CircuitCrossValidator(n_sections)
 validator.validate(model, epochs, np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
