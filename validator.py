@@ -8,6 +8,7 @@ class CircuitCrossValidator:
     def __init__(self, n_sections=5):
         self.t_student_dict = {3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
         self.n_sections = n_sections
+        self.np_mse_total_loss = None
 
     def validate(self, model, epochs, np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i):
         # TODO: Refactor for optimization and better reading
@@ -32,7 +33,7 @@ class CircuitCrossValidator:
 
             model.train(*train_data, epochs)
             if index == 0:
-                np_mse_total_loss = model.np_mse_total_loss
+                self.np_mse_total_loss = model.np_mse_total_loss
 
             np_test_t = np.append(test_data[0], test_data[3])
             np_test_v = np.append(test_data[1], test_data[4])
@@ -75,25 +76,25 @@ class CircuitCrossValidator:
         np_t_v_pred = self.sort_by_columns(data=np.transpose(np.array(t_v_pred)),
                                          columns=['t', 'v', 'pred'], columns_to_sort=['t'])
 
-        # Plot the data
-        plt.subplot(3, 1, 1)
-        plt.title('Input v(t)')
-        plt.plot(np.transpose(np_t_v_i)[0], np.transpose(np_t_v_i)[1], label='Input v(t)')
-
-        plt.subplot(3, 1, 2)
-        plt.title('MSE')
-        plt.plot(range(len(np_mse_total_loss)), np_mse_total_loss, label='Loss')
-
-        plt.subplot(3, 1, 3)
-        plt.title('Output i(t)')
-        plt.plot(np.transpose(np_t_v_i)[0], np.transpose(np_t_v_i)[2], label='Sampled i(t)')
-        plt.plot(np.transpose(np_t_v_pred)[0], np.transpose(np_t_v_pred)[2], label='Predicted i(t)')
-
-        # Add a legend
-        plt.legend()
-
-        # Show the plot
-        plt.show()
+        # # Plot the data
+        # plt.subplot(3, 1, 1)
+        # plt.title('Input v(t)')
+        # plt.plot(np.transpose(np_t_v_i)[0], np.transpose(np_t_v_i)[1], label='Input v(t)')
+        #
+        # plt.subplot(3, 1, 2)
+        # plt.title('MSE')
+        # plt.plot(range(len(np_mse_total_loss)), np_mse_total_loss, label='Loss')
+        #
+        # plt.subplot(3, 1, 3)
+        # plt.title('Output i(t)')
+        # plt.plot(np.transpose(np_t_v_i)[0], np.transpose(np_t_v_i)[2], label='Sampled i(t)')
+        # plt.plot(np.transpose(np_t_v_pred)[0], np.transpose(np_t_v_pred)[2], label='Predicted i(t)')
+        #
+        # # Add a legend
+        # plt.legend()
+        #
+        # # Show the plot
+        # plt.show()
 
     def split(self, np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i):
         return list(zip(np.array_split(np_u_t, self.n_sections),
