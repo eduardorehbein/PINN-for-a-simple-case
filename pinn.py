@@ -18,6 +18,9 @@ class CircuitPINN:
         # Optimizer
         self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
 
+        # Loss
+        self.np_mse_total_loss = np.array([])
+
     def initialize_NN(self, layers):
         weights = []
         biases = []
@@ -77,14 +80,17 @@ class CircuitPINN:
 
         for j in range(epochs):
             # Gradients
-            grad_weights, grad_biases = self.get_grads(tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v)
+            if not j % 25:
+                grad_weights, grad_biases = self.get_grads(tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v, True)
+            else:
+                grad_weights, grad_biases = self.get_grads(tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v)
 
             # Updating weights and biases
             grads = grad_weights + grad_biases
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
 
-    def get_grads(self, tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v):
+    def get_grads(self, tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v, print_loss=False):
         with tf.GradientTape(persistent=True) as gtu:
             tf_u_i_predict = self.i(tf_u_nn_input)
             tf_u_loss = tf.reduce_mean(tf.square(tf_u_i_predict - tf_u_i))
@@ -95,5 +101,10 @@ class CircuitPINN:
             tf_total_loss = tf_u_loss + tf_f_loss
         grad_weights = gtu.gradient(tf_total_loss, self.weights)
         grad_biases = gtu.gradient(tf_total_loss, self.biases)
+
+        if print_loss:
+            np_loss = tf_total_loss.numpy()
+            self.np_mse_total_loss = np.append(self.np_mse_total_loss, np_loss)
+            print('Total loss (MSE):', np_loss)
 
         return grad_weights, grad_biases

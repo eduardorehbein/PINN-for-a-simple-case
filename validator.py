@@ -19,6 +19,7 @@ class CircuitCrossValidator:
         r2s = list()
         samples = list()
         predictions = list()
+        np_mse_total_loss = None
         for index in range(len(data_sets)):
             test_data = data_sets[index]
 
@@ -30,6 +31,9 @@ class CircuitCrossValidator:
                         train_data[j] = np.append(train_data[j], data)
 
             model.train(*train_data, epochs)
+            if index == 0:
+                np_mse_total_loss = model.np_mse_total_loss
+
             np_test_t = np.append(test_data[0], test_data[3])
             np_test_v = np.append(test_data[1], test_data[4])
             np_test_i = np.append(test_data[-2], test_data[-1])
@@ -72,11 +76,15 @@ class CircuitCrossValidator:
                                          columns=['t', 'v', 'pred'], columns_to_sort=['t'])
 
         # Plot the data
-        plt.subplot(2, 1, 1)
+        plt.subplot(3, 1, 1)
         plt.title('Input v(t)')
         plt.plot(np.transpose(np_t_v_i)[0], np.transpose(np_t_v_i)[1], label='Input v(t)')
 
-        plt.subplot(2, 1, 2)
+        plt.subplot(3, 1, 2)
+        plt.title('MSE')
+        plt.plot(range(len(np_mse_total_loss)), np_mse_total_loss, label='Loss')
+
+        plt.subplot(3, 1, 3)
         plt.title('Output i(t)')
         plt.plot(np.transpose(np_t_v_i)[0], np.transpose(np_t_v_i)[2], label='Sampled i(t)')
         plt.plot(np.transpose(np_t_v_pred)[0], np.transpose(np_t_v_pred)[2], label='Predicted i(t)')
