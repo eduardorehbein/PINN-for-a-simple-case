@@ -1,7 +1,8 @@
+import copy
+
 import tensorflow as tf
 import numpy as np
 
-# TODO: Make v(t) an input of the NN
 # TODO: Improve it basing on https://github.com/pierremtb/PINNs-TF2.0/blob/master/utils/neuralnetwork.py
 
 
@@ -14,12 +15,12 @@ class CircuitPINN:
         # Initialize NN
         self.layers = [2] + hidden_layers + [1]
         self.weights, self.biases = self.initialize_NN(self.layers)
+        self.initial_weights = copy.deepcopy(self.weights)
+        self.initial_biases = copy.deepcopy(self.biases)
 
         # Optimizer
         self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
 
-        # Loss
-        self.np_mse_total_loss = np.array([])
 
     def initialize_NN(self, layers):
         weights = []
@@ -81,7 +82,7 @@ class CircuitPINN:
         for j in range(epochs):
             # Gradients
             if not j % 25:
-                grad_weights, grad_biases = self.get_grads(tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v, True)
+                grad_weights, grad_biases = self.get_grads(tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v)
             else:
                 grad_weights, grad_biases = self.get_grads(tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v)
 
@@ -90,7 +91,7 @@ class CircuitPINN:
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
 
-    def get_grads(self, tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v, print_loss=False):
+    def get_grads(self, tf_u_nn_input, tf_u_i, tf_f_nn_input, tf_f_v):
         with tf.GradientTape(persistent=True) as gtu:
             tf_u_i_predict = self.i(tf_u_nn_input)
             tf_u_loss = tf.reduce_mean(tf.square(tf_u_i_predict - tf_u_i))
@@ -102,9 +103,8 @@ class CircuitPINN:
         grad_weights = gtu.gradient(tf_total_loss, self.weights)
         grad_biases = gtu.gradient(tf_total_loss, self.biases)
 
-        if print_loss:
-            np_loss = tf_total_loss.numpy()
-            self.np_mse_total_loss = np.append(self.np_mse_total_loss, np_loss)
-            print('Total loss (MSE):', np_loss)
-
         return grad_weights, grad_biases
+
+    def reset_NN(self):
+        self.weights = copy.deepcopy(self.initial_weights)
+        self.biases = copy.deepcopy(self.initial_biases)
