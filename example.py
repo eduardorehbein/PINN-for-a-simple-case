@@ -5,14 +5,13 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Data reading
-df = pd.read_csv('./matlab/noisy_t_i_v_v4.csv')
+# df = pd.read_csv('./matlab/noisy_t_i_v_v6.csv')
+df = pd.read_csv('./matlab/noisy_t_i_v_v7.csv')
 shuffled_df = df.sample(frac=1)
 
 # Train, test, validation, split
-train_test_shuffled_df_percent = 0.95
-train_test_data_len = int(train_test_shuffled_df_percent * len(shuffled_df))
-train_test_shuffled_df = shuffled_df.sample(n=train_test_data_len)
-validation_shuffled_df = shuffled_df[~shuffled_df.isin(train_test_shuffled_df)].dropna()
+train_test_shuffled_df = shuffled_df
+validation_df = pd.read_csv('./matlab/noisy_t_i_v_v5.csv')
 
 # Setting u data (real) and f data (simulated)
 train_u_percent = 0.01
@@ -32,18 +31,18 @@ np_f_i = f_df['i'].values
 # PINN instancing
 R = 3
 L = 3
-hidden_layers = [5]
+hidden_layers = [20, 20]
 learning_rate = 0.001
 model = CircuitPINN(R, L, hidden_layers, learning_rate)
 
 # PINN validation
-n_sections = 4
+# n_sections = 4
 epochs = 8000
 
-cross_validator = CircuitCrossValidator(n_sections)
-model = cross_validator.validate(model, epochs, np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
+# cross_validator = CircuitCrossValidator(n_sections)
+# model = cross_validator.validate(model, epochs, np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
+model.train(np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, epochs)
 
-validation_df = validation_shuffled_df.sort_values(by=['t'])
 np_validation_t = validation_df['t'].values
 np_validation_v = validation_df['v'].values
 np_validation_i = validation_df['i'].values
