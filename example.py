@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Data reading
-# df = pd.read_csv('./matlab/noisy_t_i_v_v6.csv')
-df = pd.read_csv('./matlab/noisy_t_i_v_v7.csv')
+df = pd.read_csv('./matlab/noisy_t_i_v_v6.csv')
+#df = pd.read_csv('./matlab/noisy_t_i_v_v7.csv')
 shuffled_df = df.sample(frac=1)
 
 # Train, test, validation, split
@@ -31,16 +31,17 @@ np_f_i = f_df['i'].values
 # PINN instancing
 R = 3
 L = 3
-hidden_layers = [20, 20]
+hidden_layers = [9]
 learning_rate = 0.001
 model = CircuitPINN(R, L, hidden_layers, learning_rate)
 
 # PINN validation
 # n_sections = 4
-epochs = 8000
+epochs = 15000
 
 # cross_validator = CircuitCrossValidator(n_sections)
 # model = cross_validator.validate(model, epochs, np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, np_noiseless_u_i, np_f_i)
+
 model.train(np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, epochs)
 
 np_validation_t = validation_df['t'].values
@@ -49,11 +50,17 @@ np_validation_i = validation_df['i'].values
 np_prediction = model.predict(np_validation_t, np_validation_v)
 
 # Plot the data
-plt.subplot(2, 1, 1)
-plt.title('Input v(t)')
+plt.subplot(2, 2, 1)
+plt.title('Training input v(t)')
+plt.plot(df['t'].values, df['v'].values, label='Input v(t)')
+plt.subplot(2, 2, 3)
+plt.title('Training output i(t)')
+plt.plot(df['t'].values, df['i'].values, label='Sampled i(t)')
+plt.subplot(2, 2, 2)
+plt.title('Validation input v(t)')
 plt.plot(np_validation_t, np_validation_v, label='Input v(t)')
-plt.subplot(2, 1, 2)
-plt.title('Output i(t)')
+plt.subplot(2, 2, 4)
+plt.title('Validation output i(t)')
 plt.plot(np_validation_t, np_validation_i, label='Sampled i(t)')
 plt.plot(np_validation_t, np_prediction, label='Predicted i(t)')
 plt.legend()
