@@ -5,13 +5,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Data reading
-df = pd.read_csv('./matlab/noisy_t_i_v_v6.csv')
-#df = pd.read_csv('./matlab/noisy_t_i_v_v7.csv')
+# df = pd.read_csv('./matlab/noisy_t_i_v_v6.csv')
+df = pd.read_csv('./matlab/noisy_t_i_v_v7.csv')
 shuffled_df = df.sample(frac=1)
 
-# Train, test, validation, split
-train_test_shuffled_df = shuffled_df
-validation_df = pd.read_csv('./matlab/noisy_t_i_v_v5.csv')
+# Train, test, validation split
+validation_v_steps = [3, 5, 12, 20]
+validation_df = df[df['v'].isin(validation_v_steps)]
+train_test_shuffled_df = shuffled_df[~shuffled_df.isin(validation_df)].dropna()
 
 # Setting u data (real) and f data (simulated)
 train_u_percent = 0.01
@@ -44,24 +45,38 @@ epochs = 15000
 
 model.train(np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, epochs)
 
-np_validation_t = validation_df['t'].values
-np_validation_v = validation_df['v'].values
-np_validation_i = validation_df['i'].values
-np_prediction = model.predict(np_validation_t, np_validation_v)
+# np_validation_t = validation_df['t'].values
+# np_validation_v = validation_df['v'].values
+# np_validation_i = validation_df['i'].values
+# np_prediction = model.predict(np_validation_t, np_validation_v)
+#
+# # Plot the data
+# plt.subplot(2, 2, 1)
+# plt.title('Training input v(t)')
+# plt.plot(df['t'].values, df['v'].values, label='Input v(t)')
+# plt.subplot(2, 2, 3)
+# plt.title('Training output i(t)')
+# plt.plot(df['t'].values, df['i'].values, label='Sampled i(t)')
+# plt.subplot(2, 2, 2)
+# plt.title('Validation input v(t)')
+# plt.plot(np_validation_t, np_validation_v, label='Input v(t)')
+# plt.subplot(2, 2, 4)
+# plt.title('Validation output i(t)')
+# plt.plot(np_validation_t, np_validation_i, label='Sampled i(t)')
+# plt.plot(np_validation_t, np_prediction, label='Predicted i(t)')
+# plt.legend()
+# plt.show()
 
-# Plot the data
-plt.subplot(2, 2, 1)
-plt.title('Training input v(t)')
-plt.plot(df['t'].values, df['v'].values, label='Input v(t)')
-plt.subplot(2, 2, 3)
-plt.title('Training output i(t)')
-plt.plot(df['t'].values, df['i'].values, label='Sampled i(t)')
-plt.subplot(2, 2, 2)
-plt.title('Validation input v(t)')
-plt.plot(np_validation_t, np_validation_v, label='Input v(t)')
-plt.subplot(2, 2, 4)
-plt.title('Validation output i(t)')
-plt.plot(np_validation_t, np_validation_i, label='Sampled i(t)')
-plt.plot(np_validation_t, np_prediction, label='Predicted i(t)')
-plt.legend()
+for index, v_step in enumerate(validation_v_steps):
+    single_step_validation_df = validation_df[validation_df['v'] == v_step]
+    np_validation_t = single_step_validation_df['t'].values
+    np_validation_v = single_step_validation_df['v'].values
+    np_validation_i = single_step_validation_df['i'].values
+    np_prediction = model.predict(np_validation_t, np_validation_v)
+
+    plt.subplot(2, 2, index + 1)
+    plt.title('Sampled vs predicted i(t) for v(t) = ' + str(v_step) + 'D(t)')
+    plt.plot(np_validation_t, np_validation_i, label='Sampled i(t)')
+    plt.plot(np_validation_t, np_prediction, label='Predicted i(t)')
+    plt.legend()
 plt.show()
