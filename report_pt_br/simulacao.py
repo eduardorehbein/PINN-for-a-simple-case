@@ -8,7 +8,6 @@ import numpy as np
 df1 = pd.read_csv('../matlab/t_i_v_v3.csv')
 df2 = pd.read_csv('../matlab/noisy_t_i_v_v3.csv').drop(columns=['t', 'v'])
 df = pd.concat([df1, df2], axis=1, sort=False)
-print(df)
 shuffled_df = df.sample(frac=1)
 
 # Separação dos dados de treino e teste
@@ -30,7 +29,7 @@ model = CircuitPINN(R, L, hidden_layers, learning_rate)
 
 # Treino e teste
 epochs = 15000
-model.train(train_t, train_i, train_v, epochs)
+model.train(train_t, train_i, train_v, epochs, train_f_percent=0.001)
 
 sorted_test_df = test_shuffled_df.sort_values(['t'])
 np_test_t = np.array([sorted_test_df['t'].values])
