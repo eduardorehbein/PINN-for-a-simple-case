@@ -1,0 +1,9 @@
+Amostrado a cada 500 épocas:
+
+PINN: 8->0.2298, 9->0.0953, 9->0.1088, 9->0.1039 ------> R2 correlation factor must be in [ 0.8941766817272173 , 0.9731702205610785 ]
+MLP (Multiple layer perceptron): 24->2, 24->0.2896, 24->0.3335, 25->0.2747 ------> R2 correlation factor must be in [ 0.8936006218405311 , 0.9708810327618193 ]
+
+Amostrado a cada 100 épocas:
+
+PINN: 14->8, 14->1, 15->2, 14->1 ------> R2 correlation factor must be in [ 0.9043157440917539 , 0.9571584265990479 ]
+MLP (Multiple layer perceptron): 20->8, 20->1, 19->1, 19->1 ------> R2 correlation factor must be in [ 0.900024419056604 , 0.9702700627132888 ]
