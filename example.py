@@ -1,6 +1,5 @@
 from pinn import CircuitPINN
-
-import matplotlib.pyplot as plt
+from validator import PlotValidator
 import pandas as pd
 
 # Data reading
@@ -38,6 +37,12 @@ model = CircuitPINN(R, L, hidden_layers, learning_rate)
 epochs = 15000
 model.train(np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, epochs)
 
+x_axis = list()
+validation_outputs = list()
+predictions = list()
+titles = list()
+validation_labels = ['Sampled i(t)']
+prediction_labels = ['Predicted i(t)']
 for index, v_step in enumerate(validation_v_steps):
     single_step_validation_df = validation_df[validation_df['v'] == v_step]
     np_validation_t = single_step_validation_df['t'].values
@@ -45,10 +50,9 @@ for index, v_step in enumerate(validation_v_steps):
     np_validation_i = single_step_validation_df['i'].values
     np_prediction = model.predict(np_validation_t, np_validation_v)
 
-    plt.subplot(2, 2, index + 1)
-    plt.title('Sampled vs predicted i(t) for v(t) = ' + str(v_step) + 'D(t)')
-    plt.plot(np_validation_t, np_validation_i, label='Sampled i(t)')
-    plt.plot(np_validation_t, np_prediction, label='Predicted i(t)')
-    plt.legend()
+    x_axis.append(np_validation_t)
+    validation_outputs.append(np_validation_i)
+    predictions.append(np_prediction)
+    titles.append('Sampled vs predicted i(t) for v(t) = ' + str(v_step) + 'D(t)')
 
-plt.show()
+PlotValidator.multicompare(x_axis, validation_outputs, predictions, titles, validation_labels, prediction_labels)

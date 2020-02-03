@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import copy
+import matplotlib.pyplot as plt
 
 
 class CircuitCrossValidator:
@@ -78,3 +79,95 @@ class CircuitCrossValidator:
         models = r2_list_model_list[1]
         index = r2s.index(max(r2s))
         return models[index]
+
+
+class PlotValidator:
+
+    @staticmethod
+    def compare(np_x_axis, np_validation_output, np_prediction, title=None,
+                  validation_label=None, prediction_label=None):
+        if not title:
+            title = 'Sampled vc predicted output'
+        if not validation_label:
+            validation_label = 'Sampled output'
+        if not prediction_label:
+            prediction_label = 'Predicted output'
+
+        plt.title(title)
+        plt.plot(np_x_axis, np_validation_output, label=validation_label)
+        plt.plot(np_x_axis, np_prediction, label=prediction_label)
+        plt.legend()
+        plt.show()
+
+    @staticmethod
+    def multicompare(x_axis, validation_outputs, predictions, titles=None, validation_labels=None,
+                     prediction_labels=None):
+        len_x_axis = len(x_axis)
+        len_validation_outputs = len(validation_outputs)
+        len_predictions = len(predictions)
+        len_validation_labels = len(validation_labels)
+        len_prediction_labels = len(prediction_labels)
+
+        if len_x_axis > 9 or len_validation_outputs > 9 or len_predictions > 9:
+            raise Exception('This function does not plot more than 9 signals.')
+        if len_validation_outputs != len_predictions:
+            raise Exception("Validation outputs' and predictions' sizes do not match.")
+
+        rows = 1
+        if len_validation_outputs > 6:
+            rows = 3
+        elif len_validation_outputs >= 3:
+            rows = 2
+
+        columns = 1
+        if len_validation_outputs >= 5:
+            columns = 3
+        elif 1 < len_validation_outputs < 5:
+            columns = 2
+
+        standard_validation_label = PlotValidator.standard_plot_param_analysis(len_validation_labels)
+        standard_prediction_label = PlotValidator.standard_plot_param_analysis(len_prediction_labels)
+        standard_x_plot = PlotValidator.standard_plot_param_analysis(len_x_axis)
+
+        for i in range(len_validation_outputs):
+            title = PlotValidator.filter_titles_and_labels(i, titles, 'Plot ' + str(i + 1))
+
+            if standard_validation_label:
+                validation_label = validation_labels[0]
+            else:
+                validation_label = PlotValidator.filter_titles_and_labels(i, validation_labels, 'Sampled output')
+
+            if standard_prediction_label:
+                prediction_label = prediction_labels[0]
+            else:
+                prediction_label = PlotValidator.filter_titles_and_labels(i, prediction_labels, 'Predicted output')
+
+            if standard_x_plot:
+                x_plot = x_axis[0]
+            else:
+                x_plot = x_axis[i]
+
+            plt.subplot(rows, columns, i + 1)
+            plt.title(title)
+            plt.plot(x_plot, validation_outputs[i], label=validation_label)
+            plt.plot(x_plot, predictions[i], label=prediction_label)
+            plt.legend()
+
+        plt.show()
+
+    @staticmethod
+    def standard_plot_param_analysis(len_param):
+        if len_param == 1:
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def filter_titles_and_labels(index, param_list, standard_text):
+        if len(param_list) > index:
+            if not param_list[index]:
+                return standard_text
+            else:
+                return param_list[index]
+        else:
+            return standard_text
