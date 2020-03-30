@@ -145,9 +145,9 @@ class HighLevelRLCircuitPINN:
         :return: i
         """
 
-        # Get t from x
-        # Feed each subpinn with t
-        # Concat x with subpinns' output (tf_U)
+        # TODO: Get t from x
+        # TODO: Feed each subpinn with t
+        # TODO: Concat x with subpinns' output (tf_U)
 
         num_layers = len(self.weights) + 1
         tf_U = tf_x
@@ -161,55 +161,49 @@ class HighLevelRLCircuitPINN:
 
         return tf_Y
 
-    def F(self, tf_x, tf_G):
-        # sum(A_i*grad_i_NN, i = 0:l) + B*G
+    def f(self, tf_x, tf_v):
+        # ODE: Ldi_dt + Ri = v
         with tf.GradientTape() as gtf:
             gtf.watch(tf_x)
             tf_NN = self.NN(tf_x)
-        tf_grad_NN = gtf.gradient(tf_NN, tf_x)
+        tf_dNN_dt = gtf.gradient(tf_NN, tf_x)  # TODO: Look at newer versions to see how to separate t and v
 
-        return tf.add(tf.matmul(self.A[1], tf_grad_NN), tf.matmul(self.A[0], tf_NN), tf.matmul(self.tf_B, tf_G))
+        return tf_dNN_dt + (self.R / self.L) * tf_NN - (1 / self.L) * tf_v
 
-    def train(self, np_u_x, np_u_Y, np_F_x, np_F_G, epochs=1):
+    def train(self, np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, epochs=1):
         """
         PINN training
-
-        :param np_u_x: line vector dim(1,n)
-        :param np_u_Y: line vector dim(1,m)
-        :param np_F_x: line vector dim(1,k)
-        :param np_F_G: line vector dim(1,i)
         :param int epochs: number of training epochs
         :return:
         """
-
         # Data for u loss
-        tf_u_x = tf.constant(np.array(np_u_x), dtype=tf.float32)
-        tf_u_Y = tf.constant(np.array(np_u_Y), dtype=tf.float32)
+        tf_u_x = tf.constant(np.array([np_u_t, np_u_v]), dtype=tf.float32)
+        tf_u_i = tf.constant(np.array([np_u_i]), dtype=tf.float32)
 
-        # Data for F loss
-        tf_F_x = tf.constant(np.array(np_F_x), dtype=tf.float32)
-        tf_F_G = tf.constant(np.array(np_F_G), dtype=tf.float32)
+        # Data for f loss
+        tf_f_x = tf.constant(np.array([np_f_t, np_f_v]), dtype=tf.float32)
+        tf_f_v = tf.constant(np.array([np_f_v]), dtype=tf.float32)
 
         for j in range(epochs):
             # Gradients
-            grad_weights, grad_biases = self.get_grads(tf_u_x, tf_u_Y, tf_F_x, tf_F_G)
+            grad_weights, grad_biases = self.get_grads(tf_u_x, tf_u_i, tf_f_x, tf_f_v)
 
             # Updating weights and biases
             grads = grad_weights + grad_biases
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
 
-    def get_grads(self, tf_u_x, tf_u_Y, tf_F_x, tf_F_G):
-        with tf.GradientTape(persistent=True) as gtu:
-            tf_NN = self.NN(tf_u_x)
-            tf_u_loss = tf.reduce_mean(tf.square(tf_NN - tf_u_Y))
+    def get_grads(self, tf_u_x, tf_u_i, tf_f_x, tf_f_v):
+        with tf.GradientTape(persistent=True) as gt:
+            tf_u_i_predict = self.NN(tf_u_x)
+            tf_u_loss = tf.reduce_mean(tf.square(tf_u_i_predict - tf_u_i))
 
-            tf_F = self.F(tf_F_x, tf_F_G)
-            tf_F_loss = tf.reduce_mean(tf.square(tf_F))
+            tf_f_predict = tf.square(self.f(tf_f_x, tf_f_v))
+            tf_f_loss = tf.reduce_mean(tf_f_predict)
 
-            tf_total_loss = tf_u_loss + tf_F_loss
-        grad_weights = gtu.gradient(tf_total_loss, self.weights)
-        grad_biases = gtu.gradient(tf_total_loss, self.biases)
+            tf_total_loss = tf_u_loss + tf_f_loss
+        grad_weights = gt.gradient(tf_total_loss, self.weights)
+        grad_biases = gt.gradient(tf_total_loss, self.biases)
 
         return grad_weights, grad_biases
 
