@@ -166,7 +166,7 @@ class HighLevelRLCircuitPINN:
         with tf.GradientTape() as gtf:
             gtf.watch(tf_x)
             tf_NN = self.NN(tf_x)
-        tf_dNN_dt = gtf.gradient(tf_NN, tf_x)  # TODO: Look at newer versions to see how to separate t and v
+        tf_dNN_dx = gtf.gradient(tf_NN, tf_x)  # TODO: Look at newer versions to see how to separate t and v
 
         return tf_dNN_dt + (self.R / self.L) * tf_NN - (1 / self.L) * tf_v
 
