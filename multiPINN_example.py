@@ -37,8 +37,8 @@ np_hlpinn_train_u_i = np.array([initial_condition_i for j in range(len(hlpinn_tr
 np_hlpinn_train_f_t = get_np_t_from(hlpinn_train_vs)
 np_hlpinn_train_f_v = get_np_v_from(hlpinn_train_vs)
 
-np_hlpinn_test_f_t = get_np_t_from(hlpinn_test_vs)
-np_hlpinn_test_f_v = get_np_v_from(hlpinn_test_vs)
+np_hlpinn_test_t = get_np_t_from(hlpinn_test_vs)
+np_hlpinn_test_v = get_np_v_from(hlpinn_test_vs)
 
 # PINNs' params
 R = 3
@@ -58,3 +58,5 @@ hidden_layers = [9, 9]
 high_level_model = HighLevelRLCircuitPINN(R, L, subpinns, hidden_layers, learning_rate)
 high_level_model.train(np_hlpinn_train_u_t, np_hlpinn_train_u_v, np_hlpinn_train_u_i, np_hlpinn_train_f_t,
                        np_hlpinn_train_f_v, epochs)
+
+np_test_NN = high_level_model.predict(np_hlpinn_test_t, np_hlpinn_test_v)

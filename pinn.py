@@ -104,8 +104,11 @@ class HighLevelRLCircuitPINN:
         self.R = R  # Resistance
         self.L = L  # Inductance
 
+        # Subpinns
+        self.subpinns = subpinns
+
         # Initialize NN
-        self.layers = [len(subpinns) + 2] + hidden_layers + [1]
+        self.layers = [2 + len(subpinns)] + hidden_layers + [1]
         self.weights, self.biases = self.initialize_NN(self.layers)
         self.initial_weights, self.initial_biases = copy.deepcopy(self.weights), copy.deepcopy(self.biases)
 
@@ -145,28 +148,29 @@ class HighLevelRLCircuitPINN:
         :return: i
         """
 
-        # TODO: Get t from x
-        # TODO: Feed each subpinn with t
-        # TODO: Concat x with subpinns' output (tf_U)
+        tf_t = tf.slice(tf_x, [0, 0], [1, tf_x.shape[1]])
+        subpinns_predictions = [subpinn.i(tf_t) for subpinn in self.subpinns]
 
         num_layers = len(self.weights) + 1
-        tf_U = tf_x
+        tensors = [tf_x] + subpinns_predictions
+        tf_U = tf.concat(tensors, axis=0)
         for l in range(0, num_layers - 2):
             tf_W = self.weights[l]
             tf_b = self.biases[l]
             tf_U = tf.tanh(tf.add(tf.matmul(tf_W, tf_U), tf_b))
         tf_W = self.weights[-1]
         tf_b = self.biases[-1]
-        tf_Y = tf.add(tf.matmul(tf_W, tf_U), tf_b)
+        tf_NN = tf.add(tf.matmul(tf_W, tf_U), tf_b)
 
-        return tf_Y
+        return tf_NN
 
     def f(self, tf_x, tf_v):
         # ODE: Ldi_dt + Ri = v
         with tf.GradientTape() as gtf:
             gtf.watch(tf_x)
             tf_NN = self.NN(tf_x)
-        tf_dNN_dx = gtf.gradient(tf_NN, tf_x)  # TODO: Look at newer versions to see how to separate t and v
+        tf_dNN_dx = gtf.gradient(tf_NN, tf_x)
+        tf_dNN_dt = tf.slice(tf_dNN_dx, [0, 0], [1, tf_dNN_dx.shape[1]])
 
         return tf_dNN_dt + (self.R / self.L) * tf_NN - (1 / self.L) * tf_v
 
