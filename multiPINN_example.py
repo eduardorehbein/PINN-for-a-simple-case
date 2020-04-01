@@ -54,7 +54,7 @@ R = 3
 L = 3
 hidden_layers = [9]
 learning_rate = 0.001
-epochs = 1000
+epochs = 8000
 
 subpinns = list()
 for subpinn_train_v in subpinns_train_vs:
@@ -70,12 +70,16 @@ high_level_model.train(np_hlpinn_train_u_t, np_hlpinn_train_u_v, np_hlpinn_train
 
 np_test_NN = high_level_model.predict(np_hlpinn_test_t, np_hlpinn_test_v)
 
-# Plot the data
-plt.plot(np_hlpinn_test_t, np.transpose(np_test_NN), label='Predicted')
-plt.plot(np_hlpinn_test_t, np_hlpinn_test_i, label='Sampled')
+test_df = pd.DataFrame(data={'t': np_hlpinn_test_t, 'v': np_hlpinn_test_v, 'i': np_hlpinn_test_i,
+                             'NN': np_test_NN[0]})
 
-# Add a legend
+# Plot test results
+for index, v in enumerate(hlpinn_test_vs):
+    plt.subplot(2, 5, index + 1)
+    plt.title('Test results v = ' + str(v) + ' Volts')
+
+    current_v_df = test_df[test_df['v'] == v]
+    plt.plot(current_v_df['t'].values, current_v_df['NN'].values, label='Predicted')
+    plt.plot(current_v_df['t'].values, current_v_df['i'].values, label='Sampled')
 plt.legend()
-
-# Show the plot
 plt.show()
