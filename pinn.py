@@ -41,29 +41,35 @@ class CircuitPINN:
 
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
-    def predict(self, np_t, np_v, np_ic):
+    def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic, np_t_resolution, np_v_resolution):
         # The first sample has to be in t = 0s
         lists_for_prediction = [[]]
-        v_m_1 = np_v[0]
-        lists_for_prediction[-1].append((0, v_m_1))
-        for t, v in np.nditer(np_t[1:], np_v[1:]):
-            t_rest = t % self.prediction_period
+
+        np_last_transition_t = np_prediction_t[0]
+        np_last_v = np_prediction_v[0]
+        lists_for_prediction[-1].append((np.array(0), np_last_v))
+        for np_t, np_v in np.nditer([np_prediction_t[1:], np_prediction_v[1:]]):
+            np_t_mark = np.array(np_t - np_last_transition_t)
             last_list = lists_for_prediction[-1]
-            if v != v_m_1 or t_rest == 0:
-                if t_rest == 0:
-                    last_list.append((self.prediction_period, v))
-                else:
-                    last_list.append((t_rest, v))
-                v_m_1 = v
+            last_list.append((np_t_mark, np_v))
+            if np.abs(np_v - np_last_v) >= np_v_resolution/2 or \
+                    np.abs(self.prediction_period - np_t_mark) <= np_t_resolution/2:
+                np_last_v = np_v
+                np_last_transition_t = np_t
                 lists_for_prediction.append([])
-            else:
-                last_list.append((t_rest, v))
 
-        # TODO: t_tuple_and_v_tuple_in_a_list = [*zip(*lists_for_prediction[n])]
-        tf_x = tf.constant(np.array([np_t, np_v, np_ic]), dtype=tf.float32)
-        tf_nn = self.nn(tf_x)
+        predictions = []
+        np_ic_value = np_prediction_ic
+        for list_for_prediction in lists_for_prediction:
+            t_and_v_tuple = [*zip(*list_for_prediction)]
+            np_ic = np.repeat(np_ic_value, len(t_and_v_tuple[0]))
 
-        return tf_nn.numpy()[0]
+            tf_x = tf.constant(np.array([t_and_v_tuple[0], t_and_v_tuple[1], np_ic]), dtype=tf.float32)
+            np_nn = self.nn(tf_x).numpy()[0]
+            np_ic_value = np_nn[-1]
+            predictions.append(np_nn)
+
+        return np.concatenate(predictions)
 
     def nn(self, tf_x):
         num_layers = len(self.weights) + 1
@@ -88,7 +94,7 @@ class CircuitPINN:
 
         return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
 
-    def train(self, np_u_t, np_u_v, np_u_ic, np_f_t, np_f_v, np_f_ic, epochs=1):
+    def train(self, np_train_t, np_train_v, np_train_ic, epochs=1):
         # Data for u loss
         tf_u_x = tf.constant(np.array([np_u_t, np_u_v, np_u_ic]), dtype=tf.float32)
         tf_u_ic = tf.constant(np.array([np_u_ic]), dtype=tf.float32)
