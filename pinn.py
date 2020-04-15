@@ -6,13 +6,17 @@ import numpy as np
 
 
 class CircuitPINN:
-    def __init__(self, R, L, prediction_period, hidden_layers, learning_rate):
+    def __init__(self, R, L, hidden_layers, learning_rate, prediction_period, np_t_resolution, np_v_resolution):
         # Circuit parameters
         self.R = R  # Resistance
         self.L = L  # Inductance
 
         # Network's prediction period, nn(t, v, ic) works for ts in [0, prediction period]
         self.prediction_period = prediction_period
+
+        # Time and voltage signal resolution
+        self.np_t_resolution = np_t_resolution
+        self.np_v_resolution = np_v_resolution
 
         # Initialize NN
         self.layers = [3] + hidden_layers + [1]
@@ -41,27 +45,13 @@ class CircuitPINN:
 
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
-    def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic, np_t_resolution, np_v_resolution):
-        # The first sample has to be in t = 0s
-        lists_for_prediction = [[]]
-
-        np_last_transition_t = np_prediction_t[0]
-        np_last_v = np_prediction_v[0]
-        lists_for_prediction[-1].append((np.array(0), np_last_v))
-        for np_t, np_v in np.nditer([np_prediction_t[1:], np_prediction_v[1:]]):
-            np_t_mark = np.array(np_t - np_last_transition_t)
-            last_list = lists_for_prediction[-1]
-            last_list.append((np_t_mark, np_v))
-            if np.abs(np_v - np_last_v) >= np_v_resolution/2 or \
-                    np.abs(self.prediction_period - np_t_mark) <= np_t_resolution/2:
-                np_last_v = np_v
-                np_last_transition_t = np_t
-                lists_for_prediction.append([])
+    def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic):
+        subsamples = self.slash_sample(np_prediction_t, np_prediction_v, append_ic=False)
 
         predictions = []
         np_ic_value = np_prediction_ic
-        for list_for_prediction in lists_for_prediction:
-            t_and_v_tuple = [*zip(*list_for_prediction)]
+        for subsample in subsamples:
+            t_and_v_tuple = [*zip(*subsample)]
             np_ic = np.repeat(np_ic_value, len(t_and_v_tuple[0]))
 
             tf_x = tf.constant(np.array([t_and_v_tuple[0], t_and_v_tuple[1], np_ic]), dtype=tf.float32)
@@ -94,23 +84,56 @@ class CircuitPINN:
 
         return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
 
-    def train(self, np_train_t, np_train_v, np_train_ic, epochs=1):
-        # Data for u loss
-        tf_u_x = tf.constant(np.array([np_u_t, np_u_v, np_u_ic]), dtype=tf.float32)
-        tf_u_ic = tf.constant(np.array([np_u_ic]), dtype=tf.float32)
+    def train(self, np_train_t, np_train_v, np_train_ic, epochs_by_subsample=1):
+        subsamples = self.slash_sample(np_train_t, np_train_v, append_ic=True)
 
-        # Data for f loss
-        tf_f_x = tf.constant(np.array([np_f_t, np_f_v, np_f_ic]), dtype=tf.float32)
-        tf_f_v = tf.constant(np.array([np_f_v]), dtype=tf.float32)
+        for subsample in subsamples:
+            if len(subsample) == 1:
+                subsamples.remove(subsample)
 
-        for j in range(epochs):
-            # Gradients
-            grad_weights, grad_biases = self.get_grads(tf_u_x, tf_u_ic, tf_f_x, tf_f_v)
+        np_ic_value = np_train_ic
+        for subsample in subsamples:
+            t_and_v_tuple = [*zip(*subsample)]
+            np_ic = np.repeat(np_ic_value, len(t_and_v_tuple[0]))
 
-            # Updating weights and biases
-            grads = grad_weights + grad_biases
-            vars_to_update = self.weights + self.biases
-            self.optimizer.apply_gradients(zip(grads, vars_to_update))
+            # Data for u loss
+            tf_u_x = tf.constant(np.array([[t_and_v_tuple[0][0]], [t_and_v_tuple[1][0]], [np_ic_value]]), dtype=tf.float32)
+            tf_u_ic = tf.constant(np.array([np_ic_value]), dtype=tf.float32)
+
+            # Data for f loss
+            np_f_x = np.array([t_and_v_tuple[0], t_and_v_tuple[1], np_ic])
+            np.random.shuffle(np.transpose(np_f_x))
+
+            tf_f_x = tf.constant(np_f_x, dtype=tf.float32)
+            tf_f_v = tf.constant(np_f_x[1], dtype=tf.float32)
+
+            for j in range(epochs_by_subsample):
+                # Gradients
+                grad_weights, grad_biases = self.get_grads(tf_u_x, tf_u_ic, tf_f_x, tf_f_v)
+
+                # Updating weights and biases
+                grads = grad_weights + grad_biases
+                vars_to_update = self.weights + self.biases
+                self.optimizer.apply_gradients(zip(grads, vars_to_update))
+
+    def slash_sample(self, np_sample_t, np_sample_v, append_ic):
+        subsamples = [[]]
+        np_last_transition_t = np_sample_t[0]
+        np_last_v = np_sample_v[0]
+        subsamples[-1].append((np.array(0), np_last_v))
+        for np_t, np_v in np.nditer([np_sample_t[1:], np_sample_v[1:]]):
+            np_t_mark = np.array(np_t - np_last_transition_t)
+            last_sample = subsamples[-1]
+            last_sample.append((np_t_mark, np_v))
+            if np.abs(np_v - np_last_v) >= self.np_v_resolution / 2 or \
+                    np.abs(self.prediction_period - np_t_mark) <= self.np_t_resolution / 2:
+                np_last_v = np_v
+                np_last_transition_t = np_t
+                subsamples.append([])
+                if append_ic:
+                    last_sample = subsamples[-1]
+                    last_sample.append((np.array(0), np_v))
+        return subsamples
 
     def get_grads(self, tf_u_x, tf_u_ic, tf_f_x, tf_f_v):
         with tf.GradientTape(persistent=True) as gtu:

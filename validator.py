@@ -84,15 +84,8 @@ class CircuitCrossValidator:
 class PlotValidator:
 
     @staticmethod
-    def compare(np_x_axis, np_validation_output, np_prediction, title=None,
-                  validation_label=None, prediction_label=None):
-        if not title:
-            title = 'Sampled vc predicted output'
-        if not validation_label:
-            validation_label = 'Sampled output'
-        if not prediction_label:
-            prediction_label = 'Predicted output'
-
+    def compare(np_x_axis, np_validation_output, np_prediction, title='Sampled vs predicted output',
+                  validation_label='Sampled output', prediction_label='Predicted output'):
         plt.title(title)
         plt.plot(np_x_axis, np_validation_output, label=validation_label)
         plt.plot(np_x_axis, np_prediction, label=prediction_label)
