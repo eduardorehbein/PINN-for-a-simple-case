@@ -46,7 +46,7 @@ class CircuitPINN:
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
     def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic):
-        subsamples = self.slash_sample(np_prediction_t, np_prediction_v, append_ic=False)
+        subsamples = self.slash_sample(np_prediction_t, np_prediction_v, append_ic=False, slash_on_v_change=True)
 
         predictions = []
         np_ic_value = np_prediction_ic
@@ -84,39 +84,66 @@ class CircuitPINN:
 
         return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
 
-    def train(self, np_train_t, np_train_v, np_train_ic, epochs_by_subsample=1):
-        subsamples = self.slash_sample(np_train_t, np_train_v, append_ic=True)
+    def train(self, np_train_t, np_train_v, np_train_ic, epochs=1):
+        subsamples = self.slash_sample(np_train_t, np_train_v, append_ic=True, slash_on_v_change=False)
 
-        for subsample in subsamples:
-            if len(subsample) == 1:
-                subsamples.remove(subsample)
+        # for subsample in subsamples:  # TODO: Check it
+        #     if len(subsample) == 1:
+        #         subsamples.remove(subsample)
+
+        tf_u_x = None
+        tf_u_x_for_ic_updating = None
+        tf_u_ic = tf.constant(np.array([np_train_ic]), dtype=tf.float32)
+        tf_f_x = None
+        tf_f_v = None
 
         np_ic_value = np_train_ic
         for subsample in subsamples:
             t_and_v_tuple = [*zip(*subsample)]
             np_ic = np.repeat(np_ic_value, len(t_and_v_tuple[0]))
 
-            # Data for u loss
-            tf_u_x = tf.constant(np.array([[t_and_v_tuple[0][0]], [t_and_v_tuple[1][0]], [np_ic_value]]), dtype=tf.float32)
-            tf_u_ic = tf.constant(np.array([np_ic_value]), dtype=tf.float32)
+            tf_u_x_1 = tf.constant(np.array([[t_and_v_tuple[0][0]], [t_and_v_tuple[1][0]], [np_ic_value]]),
+                                     dtype=tf.float32)
+            if tf_u_x is None:
+                tf_u_x = tf_u_x_1
+            else:
+                tf_u_x = tf.concat([tf_u_x, tf_u_x_1], axis=1)
 
-            # Data for f loss
             np_f_x = np.array([t_and_v_tuple[0], t_and_v_tuple[1], np_ic])
+            tf_last_f_x = tf.transpose(tf.constant([np_f_x[:, -1]], dtype=tf.float32))
+
+            if tf_u_x_for_ic_updating is None:
+                tf_u_x_for_ic_updating = tf_last_f_x
+            elif subsample != subsamples[-1]:
+                tf_u_x_for_ic_updating = tf.concat([tf_u_x_for_ic_updating, tf_last_f_x], axis=1)
+
+            tf_ic_value = self.nn(tf_last_f_x)
+            if subsample != subsamples[-1]:
+                tf_u_ic = tf.concat([tf_u_ic, tf_ic_value], axis=1)
+            np_ic_value = tf_ic_value.numpy()[0]
+
             np.random.shuffle(np.transpose(np_f_x))
+            tf_f_x_1 = tf.constant(np_f_x, dtype=tf.float32)
+            tf_f_v_1 = tf.constant([np_f_x[1]], dtype=tf.float32)
 
-            tf_f_x = tf.constant(np_f_x, dtype=tf.float32)
-            tf_f_v = tf.constant(np_f_x[1], dtype=tf.float32)
+            if tf_f_x is None or tf_f_v is None:
+                tf_f_x = tf_f_x_1
+                tf_f_v = tf_f_v_1
+            else:
+                tf_f_x = tf.concat([tf_f_x, tf_f_x_1], axis=1)
+                tf_f_v = tf.concat([tf_f_v, tf_f_v_1], axis=1)
 
-            for j in range(epochs_by_subsample):
-                # Gradients
-                grad_weights, grad_biases = self.get_grads(tf_u_x, tf_u_ic, tf_f_x, tf_f_v)
+        for j in range(epochs):
+            # Gradients
+            grad_weights, grad_biases = self.get_grads(tf_u_x, tf_u_ic, tf_f_x, tf_f_v)
 
-                # Updating weights and biases
-                grads = grad_weights + grad_biases
-                vars_to_update = self.weights + self.biases
-                self.optimizer.apply_gradients(zip(grads, vars_to_update))
+            # Updating weights and biases
+            grads = grad_weights + grad_biases
+            vars_to_update = self.weights + self.biases
+            self.optimizer.apply_gradients(zip(grads, vars_to_update))
+            tf_u_ic = tf.concat([tf.slice(tf_u_ic, [0, 0], [1, 1]), self.nn(tf_u_x_for_ic_updating)], axis=1)
 
-    def slash_sample(self, np_sample_t, np_sample_v, append_ic):
+    def slash_sample(self, np_sample_t, np_sample_v, append_ic, slash_on_v_change):
         subsamples = [[]]
         np_last_transition_t = np_sample_t[0]
         np_last_v = np_sample_v[0]
@@ -125,14 +152,18 @@ class CircuitPINN:
             np_t_mark = np.array(np_t - np_last_transition_t)
             last_sample = subsamples[-1]
             last_sample.append((np_t_mark, np_v))
-            if np.abs(np_v - np_last_v) >= self.np_v_resolution / 2 or \
-                    np.abs(self.prediction_period - np_t_mark) <= self.np_t_resolution / 2:
+            if slash_on_v_change:
+                v_condition = np.abs(np_v - np_last_v) >= self.np_v_resolution / 2
+            else:
+                v_condition = False
+            if v_condition or np.abs(self.prediction_period - np_t_mark) <= self.np_t_resolution / 2:
                 np_last_v = np_v
                 np_last_transition_t = np_t
                 subsamples.append([])
                 if append_ic:
                     last_sample = subsamples[-1]
                     last_sample.append((np.array(0), np_v))
+
         return subsamples
 
     def get_grads(self, tf_u_x, tf_u_ic, tf_f_x, tf_f_v):

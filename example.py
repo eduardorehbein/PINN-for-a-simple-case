@@ -24,7 +24,7 @@ np_v_resolution = np.array(1)
 R = 3
 L = 3
 prediction_period = 7
-hidden_layers = [9, 9, 9]
+hidden_layers = [9]
 learning_rate = 0.001
 model = CircuitPINN(R=R,
                     L=L,
@@ -35,8 +35,8 @@ model = CircuitPINN(R=R,
                     np_v_resolution=np_v_resolution)
 
 # PINN training
-epochs_by_subsample = 1000
-model.train(np_train_t, np_train_v, np_train_ic, epochs_by_subsample)
+epochs = 10000
+model.train(np_train_t, np_train_v, np_train_ic, epochs)
 
 # PINN testing
 np_prediction = model.predict(np_test_t, np_test_v, np_test_ic)
