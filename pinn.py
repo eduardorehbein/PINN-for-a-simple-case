@@ -87,8 +87,12 @@ class CircuitPINN:
     def train(self, np_u_t, np_u_v, np_u_ic, np_f_t, np_f_v, np_f_ic, epochs=1):
         tf_u_x = tf.constant(np.array([np_u_t, np_u_v, np_u_ic]), dtype=tf.float32)
         tf_u_ic = tf.constant(np.array([np_u_ic]), dtype=tf.float32)
-        tf_f_x = tf.constant(np.array([np_f_t, np_f_v, np_f_ic]), dtype=tf.float32)
-        tf_f_v = tf.constant(np.array([np_f_v]), dtype=tf.float32)
+
+        np_f_x = np.array([np_f_t, np_f_v, np_f_ic])
+        np.random.shuffle(np.transpose(np_f_x))
+
+        tf_f_x = tf.constant(np.array(np_f_x), dtype=tf.float32)
+        tf_f_v = tf.constant(np.array([np_f_x[1]]), dtype=tf.float32)
 
         for j in range(epochs):
             # Gradients
