@@ -46,7 +46,7 @@ class CircuitPINN:
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
     def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic):
-        subsamples = self.slash_sample(np_prediction_t, np_prediction_v, append_ic=False, slash_on_v_change=True)
+        subsamples = self.slash_sample(np_prediction_t, np_prediction_v, append_ic=False, slash_on_v_change=False)
 
         predictions = []
         np_ic_value = np_prediction_ic
@@ -84,54 +84,11 @@ class CircuitPINN:
 
         return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
 
-    def train(self, np_train_t, np_train_v, np_train_ic, epochs=1):
-        subsamples = self.slash_sample(np_train_t, np_train_v, append_ic=True, slash_on_v_change=False)
-
-        # for subsample in subsamples:  # TODO: Check it
-        #     if len(subsample) == 1:
-        #         subsamples.remove(subsample)
-
-        tf_u_x = None
-        tf_u_x_for_ic_updating = None
-        tf_u_ic = tf.constant(np.array([np_train_ic]), dtype=tf.float32)
-        tf_f_x = None
-        tf_f_v = None
-
-        np_ic_value = np_train_ic
-        for subsample in subsamples:
-            t_and_v_tuple = [*zip(*subsample)]
-            np_ic = np.repeat(np_ic_value, len(t_and_v_tuple[0]))
-
-            tf_u_x_1 = tf.constant(np.array([[t_and_v_tuple[0][0]], [t_and_v_tuple[1][0]], [np_ic_value]]),
-                                     dtype=tf.float32)
-            if tf_u_x is None:
-                tf_u_x = tf_u_x_1
-            else:
-                tf_u_x = tf.concat([tf_u_x, tf_u_x_1], axis=1)
-
-            np_f_x = np.array([t_and_v_tuple[0], t_and_v_tuple[1], np_ic])
-            tf_last_f_x = tf.transpose(tf.constant([np_f_x[:, -1]], dtype=tf.float32))
-
-            if tf_u_x_for_ic_updating is None:
-                tf_u_x_for_ic_updating = tf_last_f_x
-            elif subsample != subsamples[-1]:
-                tf_u_x_for_ic_updating = tf.concat([tf_u_x_for_ic_updating, tf_last_f_x], axis=1)
-
-            tf_ic_value = self.nn(tf_last_f_x)
-            if subsample != subsamples[-1]:
-                tf_u_ic = tf.concat([tf_u_ic, tf_ic_value], axis=1)
-            np_ic_value = tf_ic_value.numpy()[0]
-
-            np.random.shuffle(np.transpose(np_f_x))
-            tf_f_x_1 = tf.constant(np_f_x, dtype=tf.float32)
-            tf_f_v_1 = tf.constant([np_f_x[1]], dtype=tf.float32)
-
-            if tf_f_x is None or tf_f_v is None:
-                tf_f_x = tf_f_x_1
-                tf_f_v = tf_f_v_1
-            else:
-                tf_f_x = tf.concat([tf_f_x, tf_f_x_1], axis=1)
-                tf_f_v = tf.concat([tf_f_v, tf_f_v_1], axis=1)
+    def train(self, np_u_t, np_u_v, np_u_ic, np_f_t, np_f_v, np_f_ic, epochs=1):
+        tf_u_x = tf.constant(np.array([np_u_t, np_u_v, np_u_ic]), dtype=tf.float32)
+        tf_u_ic = tf.constant(np.array([np_u_ic]), dtype=tf.float32)
+        tf_f_x = tf.constant(np.array([np_f_t, np_f_v, np_f_ic]), dtype=tf.float32)
+        tf_f_v = tf.constant(np.array([np_f_v]), dtype=tf.float32)
 
         for j in range(epochs):
             # Gradients
@@ -141,7 +98,6 @@ class CircuitPINN:
             grads = grad_weights + grad_biases
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
-            tf_u_ic = tf.concat([tf.slice(tf_u_ic, [0, 0], [1, 1]), self.nn(tf_u_x_for_ic_updating)], axis=1)
 
     def slash_sample(self, np_sample_t, np_sample_v, append_ic, slash_on_v_change):
         subsamples = [[]]
@@ -156,7 +112,8 @@ class CircuitPINN:
                 v_condition = np.abs(np_v - np_last_v) >= self.np_v_resolution / 2
             else:
                 v_condition = False
-            if v_condition or np.abs(self.prediction_period - np_t_mark) <= self.np_t_resolution / 2:
+            if (v_condition or np.abs(self.prediction_period - np_t_mark) <= self.np_t_resolution / 2) \
+                    and np_t != np_sample_t[-1]:
                 np_last_v = np_v
                 np_last_transition_t = np_t
                 subsamples.append([])
