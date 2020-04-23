@@ -107,7 +107,7 @@ class CircuitPINN:
         subsamples = [[]]
         np_last_transition_t = np_sample_t[0]
         np_last_v = np_sample_v[0]
-        subsamples[-1].append((np.array(0), np_last_v))
+        subsamples[-1].append((np.array(0), np.array(np_last_v)))
         for np_t, np_v in np.nditer([np_sample_t[1:], np_sample_v[1:]]):
             np_t_mark = np.array(np_t - np_last_transition_t)
             last_sample = subsamples[-1]
