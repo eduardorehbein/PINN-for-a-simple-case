@@ -5,7 +5,7 @@ from scipy.integrate import odeint
 import random
 
 # Train data
-random.seed(30)
+#random.seed(30)
 
 t = [0.01*j for j in range(701)]
 initial_conditions = [(-1**j)*4*random.random() for j in range(100)]
