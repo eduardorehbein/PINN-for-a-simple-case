@@ -45,8 +45,9 @@ class CircuitPINN:
 
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
-    def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic):
-        subsamples = self.slash_sample(np_prediction_t, np_prediction_v, append_ic=False, slash_on_v_change=False)
+    def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic, t_normalizer=None):
+        subsamples = self.slash_sample(np_prediction_t, np_prediction_v,
+                                       append_ic=False, slash_on_v_change=False, t_normalizer=t_normalizer)
 
         predictions = []
         np_ic_value = np_prediction_ic
@@ -103,7 +104,7 @@ class CircuitPINN:
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
 
-    def slash_sample(self, np_sample_t, np_sample_v, append_ic, slash_on_v_change):
+    def slash_sample(self, np_sample_t, np_sample_v, append_ic, slash_on_v_change, t_normalizer):
         subsamples = [[]]
         np_last_transition_t = np_sample_t[0]
         np_last_v = np_sample_v[0]
@@ -111,7 +112,10 @@ class CircuitPINN:
         for np_t, np_v in np.nditer([np_sample_t[1:], np_sample_v[1:]]):
             np_t_mark = np.array(np_t - np_last_transition_t)
             last_sample = subsamples[-1]
-            last_sample.append((np_t_mark, np_v))
+            if t_normalizer is None:
+                last_sample.append((np_t_mark, np_v))
+            else:
+                last_sample.append((t_normalizer.normalize(np_t_mark), np_v))
             if slash_on_v_change:
                 v_condition = np.abs(np_v - np_last_v) >= self.np_v_resolution / 2
             else:
@@ -123,7 +127,10 @@ class CircuitPINN:
                 subsamples.append([])
                 if append_ic:
                     last_sample = subsamples[-1]
-                    last_sample.append((np.array(0), np_v))
+                    if t_normalizer is None:
+                        last_sample.append((np.array(0), np_v))
+                    else:
+                        last_sample.append((t_normalizer.normalize(np.array(0)), np_v))
 
         return subsamples
 

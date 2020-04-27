@@ -1,11 +1,12 @@
 from pinn import CircuitPINN
 from validator import PlotValidator
+from normalizer import Normalizer
 import numpy as np
 from scipy.integrate import odeint
 import random
 
 # Train data
-#random.seed(30)
+random.seed(30)
 
 t = [0.01*j for j in range(701)]
 initial_conditions = [(-1**j)*4*random.random() for j in range(100)]
@@ -81,15 +82,32 @@ def di_dt(i_t, t1):
 np_test_t = np.array([0.01*j for j in range(9101)])
 np_test_v = np.array([v_t(t1) for t1 in np_test_t])
 np_test_ic = np.array([0])
+
 np_test_i = odeint(di_dt, np_test_ic, np_test_t)
 
-np_t_resolution = np.array(0.01)
-np_v_resolution = np.array(1)
+# Data normalization
+t_normalizer = Normalizer()
+v_normalizer = Normalizer()
+i_normalizer = Normalizer()
+
+t_normalizer.normalize(np_t)
+np_norm_train_u_t = t_normalizer.normalize(np_train_u_t)
+np_norm_train_u_v = v_normalizer.normalize(np_train_u_v)
+np_norm_train_u_ic = i_normalizer.normalize(np_train_u_ic)
+
+np_norm_train_f_t = t_normalizer.normalize(np_train_f_t)
+np_norm_train_f_v = v_normalizer.normalize(np_train_f_v)
+np_norm_train_f_ic = i_normalizer.normalize(np_train_f_ic)
+
+np_norm_test_v = v_normalizer.normalize(np_test_v)
+np_norm_test_ic = i_normalizer.normalize(np_test_ic)
 
 # PINN instancing
 prediction_period = 7
 hidden_layers = [9, 9]
 learning_rate = 0.001
+np_t_resolution = np.array(0.01)
+np_v_resolution = np.array(1)
 model = CircuitPINN(R=R,
                     L=L,
                     hidden_layers=hidden_layers,
@@ -99,9 +117,11 @@ model = CircuitPINN(R=R,
                     np_v_resolution=np_v_resolution)
 
 # PINN training
-epochs = 10000
-model.train(np_train_u_t, np_train_u_v, np_train_u_ic, np_train_f_t, np_train_f_v, np_train_f_ic, epochs)
+epochs = 5000
+model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
+            np_norm_train_f_ic, epochs)
 
 # PINN testing
-np_prediction = model.predict(np_test_t, np_test_v, np_test_ic)
+np_norm_prediction = model.predict(np_test_t, np_norm_test_v, np_norm_test_ic, t_normalizer=t_normalizer)
+np_prediction = i_normalizer.denormalize(np_norm_prediction)
 PlotValidator.compare(np_test_t, np_test_i, np_prediction)
