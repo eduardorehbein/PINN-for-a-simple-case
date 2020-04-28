@@ -6,17 +6,13 @@ import numpy as np
 
 
 class CircuitPINN:
-    def __init__(self, R, L, hidden_layers, learning_rate, prediction_period, np_t_resolution, np_v_resolution):
+    def __init__(self, R, L, hidden_layers, learning_rate, prediction_period):
         # Circuit parameters
         self.R = R  # Resistance
         self.L = L  # Inductance
 
         # Network's prediction period, nn(t, v, ic) works for ts in [0, prediction period]
         self.prediction_period = prediction_period
-
-        # Time and voltage signal resolution
-        self.np_t_resolution = np_t_resolution
-        self.np_v_resolution = np_v_resolution
 
         # Initialize NN
         self.layers = [3] + hidden_layers + [1]
@@ -45,22 +41,10 @@ class CircuitPINN:
 
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
-    def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic, t_normalizer=None):
-        subsamples = self.slash_sample(np_prediction_t, np_prediction_v,
-                                       append_ic=False, slash_on_v_change=False, t_normalizer=t_normalizer)
+    def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic):
+        tf_x = tf.constant(np.array([np_prediction_t, np_prediction_v, np_prediction_ic]), dtype=tf.float32)
 
-        predictions = []
-        np_ic_value = np_prediction_ic
-        for subsample in subsamples:
-            t_and_v_tuple = [*zip(*subsample)]
-            np_ic = np.repeat(np_ic_value, len(t_and_v_tuple[0]))
-
-            tf_x = tf.constant(np.array([t_and_v_tuple[0], t_and_v_tuple[1], np_ic]), dtype=tf.float32)
-            np_nn = self.nn(tf_x).numpy()[0]
-            np_ic_value = np_nn[-1]
-            predictions.append(np_nn)
-
-        return np.concatenate(predictions)
+        return self.nn(tf_x).numpy()[0]
 
     def nn(self, tf_x):
         num_layers = len(self.weights) + 1
@@ -103,36 +87,6 @@ class CircuitPINN:
             grads = grad_weights + grad_biases
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
-
-    def slash_sample(self, np_sample_t, np_sample_v, append_ic, slash_on_v_change, t_normalizer):
-        subsamples = [[]]
-        np_last_transition_t = np_sample_t[0]
-        np_last_v = np_sample_v[0]
-        subsamples[-1].append((np.array(0), np.array(np_last_v)))
-        for np_t, np_v in np.nditer([np_sample_t[1:], np_sample_v[1:]]):
-            np_t_mark = np.array(np_t - np_last_transition_t)
-            last_sample = subsamples[-1]
-            if t_normalizer is None:
-                last_sample.append((np_t_mark, np_v))
-            else:
-                last_sample.append((t_normalizer.normalize(np_t_mark), np_v))
-            if slash_on_v_change:
-                v_condition = np.abs(np_v - np_last_v) >= self.np_v_resolution / 2
-            else:
-                v_condition = False
-            if (v_condition or np.abs(self.prediction_period - np_t_mark) <= self.np_t_resolution / 2) \
-                    and np_t != np_sample_t[-1]:
-                np_last_v = np_v
-                np_last_transition_t = np_t
-                subsamples.append([])
-                if append_ic:
-                    last_sample = subsamples[-1]
-                    if t_normalizer is None:
-                        last_sample.append((np.array(0), np_v))
-                    else:
-                        last_sample.append((t_normalizer.normalize(np.array(0)), np_v))
-
-        return subsamples
 
     def get_grads(self, tf_u_x, tf_u_ic, tf_f_x, tf_f_v):
         with tf.GradientTape(persistent=True) as gtu:
