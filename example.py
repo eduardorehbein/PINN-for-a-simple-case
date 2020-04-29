@@ -9,7 +9,7 @@ import random
 R = 3
 L = 3
 prediction_period = 7
-hidden_layers = [9, 9]
+hidden_layers = [5, 5, 5]
 learning_rate = 0.001
 model = CircuitPINN(R=R,
                     L=L,
@@ -21,8 +21,11 @@ model = CircuitPINN(R=R,
 random.seed(30)
 t = [0.01*j for j in range(701)]
 
-train_ics = [(-1 ** j) * 4 * random.random() for j in range(100)]
-train_vs = [(-1**j) * 20 * random.random() for j in range(len(train_ics))]
+train_ics = [((-1) ** j) * 4 * random.random() for j in range(100)]
+train_vs = [((-1) ** j) * 20 * random.random() for j in range(len(train_ics))]
+
+random.shuffle(train_ics)
+random.shuffle(train_vs)
 
 np_train_u_t = np.zeros(len(train_ics))
 np_train_u_v = np.array(train_vs)
@@ -69,13 +72,14 @@ np_norm_train_f_v = v_normalizer.normalize(np_train_f_v)
 np_norm_train_f_ic = i_normalizer.normalize(np_train_f_ic)
 
 # PINN training
-epochs = 5000
-model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
-            np_norm_train_f_ic, epochs)
+epochs = 8000
+model.train(np_train_u_t, np_train_u_v, np_train_u_ic, np_train_f_t, np_train_f_v, np_train_f_ic, epochs)
+# model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
+#             np_norm_train_f_ic, epochs)
 
 # Setting test data
-test_vs = train_vs[:9]  #[10, 12, 7, 4, 8, 11, 13, -1, -6]
-test_ics = train_ics[:9]  #[(-1 ** j) * 4 * random.random() for j in range(len(test_vs))]
+test_vs = [10, 12, 7, 4, 8, 11, 13, -1, -6]  # train_vs[:9] #
+test_ics = [((-1) ** j) * 4 * random.random() for j in range(len(test_vs))]  # train_ics[:9] #
 
 sampled_outputs = []
 predictions = []
@@ -86,14 +90,15 @@ for j in range(len(test_vs)):
     sampled_outputs.append(np_i)
 
     # PINN testing
-    np_v = np.full((len(t),), test_vs[j])
     np_ic = np.full((len(t),), test_ics[j])
+    np_v = np.full((len(t),), test_vs[j])
 
     np_norm_ic = i_normalizer.normalize(np_ic)
     np_norm_v = v_normalizer.normalize(np_v)
 
-    np_norm_prediction = model.predict(np_norm_t, np_norm_v, np_norm_ic)
-    np_prediction = i_normalizer.denormalize(np_norm_prediction)
+    # np_norm_prediction = model.predict(np_norm_t, np_norm_v, np_norm_ic)
+    # np_prediction = i_normalizer.denormalize(np_norm_prediction)
+    np_prediction = model.predict(np_t, np_v, np_ic)
     predictions.append(np_prediction)
 
 # Test results
