@@ -5,11 +5,14 @@ from scipy.integrate import odeint
 import random
 
 # Train data
-#random.seed(30)
+random.seed(30)
 
 t = [0.01*j for j in range(701)]
-initial_conditions = [(-1**j)*4*random.random() for j in range(100)]
-train_vs = [(-1**j)*20*random.random() for j in range(len(initial_conditions))]
+initial_conditions = [((-1)**j)*4*random.random() for j in range(100)]
+train_vs = [((-1)**j)*20*random.random() for j in range(len(initial_conditions))]
+
+random.shuffle(initial_conditions)
+random.shuffle(train_vs)
 
 np_train_u_t = np.zeros(len(initial_conditions))
 np_train_u_v = np.array(train_vs)
