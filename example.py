@@ -5,17 +5,9 @@ import numpy as np
 from scipy.integrate import odeint
 import random
 
-# PINN instancing
+# Circuit parameters
 R = 3
 L = 3
-prediction_period = 7
-hidden_layers = [5, 5, 5]
-learning_rate = 0.001
-model = CircuitPINN(R=R,
-                    L=L,
-                    hidden_layers=hidden_layers,
-                    learning_rate=learning_rate,
-                    prediction_period=prediction_period)
 
 # Setting train data
 random.seed(30)
@@ -71,11 +63,23 @@ np_norm_train_f_t = t_normalizer.normalize(np_train_f_t)
 np_norm_train_f_v = v_normalizer.normalize(np_train_f_v)
 np_norm_train_f_ic = i_normalizer.normalize(np_train_f_ic)
 
+# PINN instancing
+hidden_layers = [9, 9]
+learning_rate = 0.001
+model = CircuitPINN(R=R,
+                    L=L,
+                    hidden_layers=hidden_layers,
+                    learning_rate=learning_rate,
+                    t_normalizer=t_normalizer,
+                    v_normalizer=v_normalizer,
+                    i_normalizer=i_normalizer)
+
+
 # PINN training
-epochs = 8000
-model.train(np_train_u_t, np_train_u_v, np_train_u_ic, np_train_f_t, np_train_f_v, np_train_f_ic, epochs)
-# model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
-#             np_norm_train_f_ic, epochs)
+epochs = 10000
+# model.train(np_train_u_t, np_train_u_v, np_train_u_ic, np_train_f_t, np_train_f_v, np_train_f_ic, epochs)
+model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
+            np_norm_train_f_ic, epochs)
 
 # Setting test data
 test_vs = [10, 12, 7, 4, 8, 11, 13, -1, -6]  # train_vs[:9] #
@@ -83,23 +87,30 @@ test_ics = [((-1) ** j) * 4 * random.random() for j in range(len(test_vs))]  # t
 
 sampled_outputs = []
 predictions = []
+titles = []
 
 np_norm_t = t_normalizer.normalize(np_t)
 for j in range(len(test_vs)):
-    np_i = odeint(lambda i_t, time_t: (1/L)*test_vs[j] - (R/L)*i_t, test_ics[j], np_t)
+    test_v = test_vs[j]
+    test_ic = test_ics[j]
+
+    np_i = odeint(lambda i_t, time_t: (1/L) * test_v - (R / L) * i_t, test_ic, np_t)
     sampled_outputs.append(np_i)
 
     # PINN testing
-    np_ic = np.full((len(t),), test_ics[j])
-    np_v = np.full((len(t),), test_vs[j])
+    np_ic = np.full((len(t),), test_ic)
+    np_v = np.full((len(t),), test_v)
 
     np_norm_ic = i_normalizer.normalize(np_ic)
     np_norm_v = v_normalizer.normalize(np_v)
 
-    # np_norm_prediction = model.predict(np_norm_t, np_norm_v, np_norm_ic)
-    # np_prediction = i_normalizer.denormalize(np_norm_prediction)
-    np_prediction = model.predict(np_t, np_v, np_ic)
+    np_norm_prediction = model.predict(np_norm_t, np_norm_v, np_norm_ic)
+    np_prediction = i_normalizer.denormalize(np_norm_prediction)
+    # np_prediction = model.predict(np_t, np_v, np_ic)
     predictions.append(np_prediction)
 
+    title = 'i0 = ' + str(round(test_ic, 3)) + ' A, v = ' + str(test_v) + ' V'
+    titles.append(title)
+
 # Test results
-PlotValidator.multicompare([np_t], sampled_outputs, predictions, [str(j) for j in range(len(test_vs))])
+PlotValidator.multicompare([np_t], sampled_outputs, predictions, titles)
