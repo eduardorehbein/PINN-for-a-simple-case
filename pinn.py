@@ -6,7 +6,7 @@ import numpy as np
 
 
 class CircuitPINN:
-    def __init__(self, R, L, hidden_layers, learning_rate, t_normalizer, v_normalizer, i_normalizer):
+    def __init__(self, R, L, hidden_layers, learning_rate, t_normalizer=None, v_normalizer=None, i_normalizer=None):
         # Circuit parameters
         self.R = R  # Resistance
         self.L = L  # Inductance
@@ -15,6 +15,11 @@ class CircuitPINN:
         self.t_normalizer = t_normalizer
         self.v_normalizer = v_normalizer
         self.i_normalizer = i_normalizer
+
+        if self.t_normalizer is None or self.v_normalizer is None or self.i_normalizer is None:
+            self.data_is_normalized = False
+        else:
+            self.data_is_normalized = True
 
         # Initialize NN
         self.layers = [3] + hidden_layers + [1]
@@ -68,12 +73,12 @@ class CircuitPINN:
             tf_nn = self.nn(tf_x)
         tf_dnn_dx = gtf.gradient(tf_nn, tf_x)
         tf_dnn_dt = tf.slice(tf_dnn_dx, [0, 0], [1, tf_dnn_dx.shape[1]])
-
-        return (self.i_normalizer.std/self.t_normalizer.std) * tf_dnn_dt + \
-               (self.R / self.L) * self.i_normalizer.denormalize(tf_nn) - \
-               (1 / self.L) * self.v_normalizer.denormalize(tf_v)
-
-        # return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
+        if self.data_is_normalized:
+            return (self.i_normalizer.std / self.t_normalizer.std) * tf_dnn_dt + \
+                   (self.R / self.L) * self.i_normalizer.denormalize(tf_nn) - \
+                   (1 / self.L) * self.v_normalizer.denormalize(tf_v)
+        else:
+            return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
 
     def train(self, np_u_t, np_u_v, np_u_ic, np_f_t, np_f_v, np_f_ic, epochs=1):
         tf_u_x = tf.constant(np.array([np_u_t, np_u_v, np_u_ic]), dtype=tf.float32)
