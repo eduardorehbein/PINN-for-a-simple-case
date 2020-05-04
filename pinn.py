@@ -81,23 +81,66 @@ class CircuitPINN:
             return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
 
     def train(self, np_u_t, np_u_v, np_u_ic, np_f_t, np_f_v, np_f_ic, epochs=1):
-        tf_u_x = tf.constant(np.array([np_u_t, np_u_v, np_u_ic]), dtype=tf.float32)
-        tf_u_ic = tf.constant(np.array([np_u_ic]), dtype=tf.float32)
+        train_u_len = int(0.9 * len(np_u_t))
+        train_f_len = int(0.9 * len(np_f_t))
 
-        np_f_x = np.array([np_f_t, np_f_v, np_f_ic])
-        np.random.shuffle(np.transpose(np_f_x))
+        # Train data
+        tf_train_u_x = tf.constant(
+            np.array([
+                np_u_t[:train_u_len],
+                np_u_v[:train_u_len],
+                np_u_ic[:train_u_len]]),
+            dtype=tf.float32)
+        tf_train_u_ic = tf.constant(np.array([np_u_ic[:train_u_len]]), dtype=tf.float32)
 
-        tf_f_x = tf.constant(np.array(np_f_x), dtype=tf.float32)
-        tf_f_v = tf.constant(np.array([np_f_x[1]]), dtype=tf.float32)
+        np_train_f_x = np.array([
+            np_f_t[:train_f_len],
+            np_f_v[:train_f_len],
+            np_f_ic[:train_f_len]
+        ])
+        np.random.shuffle(np.transpose(np_train_f_x))
 
-        for j in range(epochs):
+        tf_train_f_x = tf.constant(np.array(np_train_f_x), dtype=tf.float32)
+        tf_train_f_v = tf.constant(np.array([np_train_f_x[1]]), dtype=tf.float32)
+
+        # Validation data
+        tf_val_u_x = tf.constant(
+            np.array([
+                np_u_t[train_u_len:],
+                np_u_v[train_u_len:],
+                np_u_ic[train_u_len:]]),
+            dtype=tf.float32)
+        tf_val_u_ic = tf.constant(np.array([np_u_ic[train_u_len:]]), dtype=tf.float32)
+
+        np_val_f_x = np.array([
+            np_f_t[train_f_len:],
+            np_f_v[train_f_len:],
+            np_f_ic[train_f_len:]
+        ])
+        np.random.shuffle(np.transpose(np_val_f_x))
+
+        tf_val_f_x = tf.constant(np.array(np_val_f_x), dtype=tf.float32)
+        tf_val_f_v = tf.constant(np.array([np_val_f_x[1]]), dtype=tf.float32)
+
+        for epoch in range(epochs):
             # Gradients
-            grad_weights, grad_biases = self.get_grads(tf_u_x, tf_u_ic, tf_f_x, tf_f_v)
+            grad_weights, grad_biases = self.get_grads(tf_train_u_x, tf_train_u_ic, tf_train_f_x, tf_train_f_v)
 
             # Updating weights and biases
             grads = grad_weights + grad_biases
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
+
+            # Validation
+            tf_val_u_predict = self.nn(tf_val_u_x)
+            tf_val_u_loss = tf.reduce_mean(tf.square(tf_val_u_predict - tf_val_u_ic))
+
+            tf_val_f_predict = self.f(tf_val_f_x, tf_val_f_v)
+            tf_val_f_loss = tf.reduce_mean(tf.square(tf_val_f_predict))
+
+            tf_val_total_loss = tf_val_u_loss + tf_val_f_loss
+            if epoch % 100 == 0:
+                print('Validation loss on epoch ' + str(epoch) + ': ' + str(tf_val_total_loss.numpy()))
 
     def get_grads(self, tf_u_x, tf_u_ic, tf_f_x, tf_f_v):
         with tf.GradientTape(persistent=True) as gtu:
