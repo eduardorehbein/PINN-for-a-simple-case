@@ -82,19 +82,24 @@ class CircuitCrossValidator:
 
 
 class PlotValidator:
+    def __init__(self):
+        self.figure_count = 1
 
-    @staticmethod
-    def compare(np_x_axis, np_sampled_output, np_prediction, title='Sampled vs predicted output',
+    def compare(self, np_x_axis, np_sampled_output, np_prediction, title='Sampled vs predicted output',
                 sampled_output_label='Sampled output', prediction_label='Predicted output'):
+        plt.figure(self.figure_count)
+        self.figure_count = self.figure_count + 1
         plt.title(title)
         plt.plot(np_x_axis, np_sampled_output, label=sampled_output_label)
         plt.plot(np_x_axis, np_prediction, label=prediction_label)
         plt.legend()
         plt.show()
 
-    @staticmethod
-    def multicompare(x_axis, sampled_outputs, predictions, titles, sampled_outputs_labels=['Sampled output'],
+    def multicompare(self, x_axis, sampled_outputs, predictions, titles, sampled_outputs_labels=['Sampled output'],
                      prediction_labels=['Predicted output']):
+        plt.figure(self.figure_count)
+        self.figure_count = self.figure_count + 1
+
         len_x_axis = len(x_axis)
         len_validation_outputs = len(sampled_outputs)
         len_predictions = len(predictions)
@@ -147,6 +152,13 @@ class PlotValidator:
             plt.plot(x_plot, predictions[i], label=prediction_label)
             plt.legend()
 
+        plt.show()
+
+    def plot_validation_loss(self, model):
+        plt.figure(self.figure_count)
+        self.figure_count = self.figure_count + 1
+        plt.title('Epochs x Validation loss')
+        plt.plot([100 * j for j in range(len(model.validation_loss))], model.validation_loss)
         plt.show()
 
     @staticmethod

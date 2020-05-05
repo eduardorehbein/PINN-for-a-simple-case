@@ -27,7 +27,10 @@ class CircuitPINN:
         self.initial_weights, self.initial_biases = copy.deepcopy(self.weights), copy.deepcopy(self.biases)
 
         # Optimizer
-        self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
+        self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-07)
+
+        # Training loss
+        self.validation_loss = None
 
     def initialize_nn(self, layers):
         weights = []
@@ -80,7 +83,7 @@ class CircuitPINN:
         else:
             return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
 
-    def train(self, np_u_t, np_u_v, np_u_ic, np_f_t, np_f_v, np_f_ic, epochs=1):
+    def train(self, np_u_t, np_u_v, np_u_ic, np_f_t, np_f_v, np_f_ic, max_epochs=10000, stop_loss=0.0005):
         train_u_len = int(0.9 * len(np_u_t))
         train_f_len = int(0.9 * len(np_f_t))
 
@@ -122,7 +125,15 @@ class CircuitPINN:
         tf_val_f_x = tf.constant(np.array(np_val_f_x), dtype=tf.float32)
         tf_val_f_v = tf.constant(np.array([np_val_f_x[1]]), dtype=tf.float32)
 
-        for epoch in range(epochs):
+        # Training process
+        epoch = 0
+        tf_val_total_loss = tf.constant([1000], dtype=tf.float32)
+        tf_val_best_total_loss = copy.deepcopy(tf_val_total_loss)
+        best_weights = copy.deepcopy(self.weights)
+        best_biases = copy.deepcopy(self.biases)
+        loss_rising = False
+        self.validation_loss = []
+        while epoch < max_epochs and tf_val_total_loss > stop_loss and not loss_rising:
             # Gradients
             grad_weights, grad_biases = self.get_grads(tf_train_u_x, tf_train_u_ic, tf_train_f_x, tf_train_f_v)
 
@@ -139,8 +150,22 @@ class CircuitPINN:
             tf_val_f_loss = tf.reduce_mean(tf.square(tf_val_f_predict))
 
             tf_val_total_loss = tf_val_u_loss + tf_val_f_loss
+
             if epoch % 100 == 0:
-                print('Validation loss on epoch ' + str(epoch) + ': ' + str(tf_val_total_loss.numpy()))
+                np_loss = tf_val_total_loss.numpy()
+                self.validation_loss.append(np_loss)
+                print('Validation loss on epoch ' + str(epoch) + ': ' + str(np_loss))
+                if tf_val_total_loss > tf_val_best_total_loss:
+                    loss_rising = True
+                else:
+                    tf_val_best_total_loss = copy.deepcopy(tf_val_total_loss)
+                    best_weights = copy.deepcopy(self.weights)
+                    best_biases = copy.deepcopy(self.biases)
+
+            epoch = epoch + 1
+        self.weights = best_weights
+        self.biases = best_biases
+        print('Validation loss at the training\'s end: ' + str(tf_val_total_loss.numpy()))
 
     def get_grads(self, tf_u_x, tf_u_ic, tf_f_x, tf_f_v):
         with tf.GradientTape(persistent=True) as gtu:

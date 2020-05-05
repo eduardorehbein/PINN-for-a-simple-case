@@ -79,13 +79,13 @@ model = CircuitPINN(R=R,
 # Model for denormalized data
 # model = CircuitPINN(R=R, L=L, hidden_layers=hidden_layers, learning_rate=learning_rate)
 
-
 # PINN training
-epochs = 10000
+max_epochs = 15000
+stop_loss = 0.0002
 
 # Train with normalized data
 model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
-            np_norm_train_f_ic, epochs)
+            np_norm_train_f_ic, max_epochs=max_epochs, stop_loss=stop_loss)
 
 # Train with denormalized data
 # model.train(np_train_u_t, np_train_u_v, np_train_u_ic, np_train_f_t, np_train_f_v, np_train_f_ic, epochs)
@@ -126,4 +126,6 @@ for j in range(len(test_vs)):
     titles.append(title)
 
 # Results
-PlotValidator.multicompare([np_t], sampled_outputs, predictions, titles)
+plotter = PlotValidator()
+plotter.multicompare([np_t], sampled_outputs, predictions, titles)
+plotter.plot_validation_loss(model)
