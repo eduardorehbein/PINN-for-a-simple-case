@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import copy
+import matplotlib.pyplot as plt
 
 
 class CircuitCrossValidator:
@@ -78,3 +79,101 @@ class CircuitCrossValidator:
         models = r2_list_model_list[1]
         index = r2s.index(max(r2s))
         return models[index]
+
+
+class PlotValidator:
+    def __init__(self):
+        self.figure_count = 1
+
+    def compare(self, np_x_axis, np_sampled_output, np_prediction, title='Sampled vs predicted output',
+                sampled_output_label='Sampled output', prediction_label='Predicted output'):
+        plt.figure(self.figure_count)
+        self.figure_count = self.figure_count + 1
+        plt.title(title)
+        plt.plot(np_x_axis, np_sampled_output, label=sampled_output_label)
+        plt.plot(np_x_axis, np_prediction, label=prediction_label)
+        plt.legend()
+        plt.show()
+
+    def multicompare(self, x_axis, sampled_outputs, predictions, titles, sampled_outputs_labels=['Sampled output'],
+                     prediction_labels=['Predicted output']):
+        plt.figure(self.figure_count)
+        self.figure_count = self.figure_count + 1
+
+        len_x_axis = len(x_axis)
+        len_validation_outputs = len(sampled_outputs)
+        len_predictions = len(predictions)
+        len_sampled_outputs_labels = len(sampled_outputs_labels)
+        len_prediction_labels = len(prediction_labels)
+
+        if len_x_axis > 9 or len_validation_outputs > 9 or len_predictions > 9:
+            raise Exception('This function does not plot more than 9 signals.')
+        if len_validation_outputs != len_predictions:
+            raise Exception("Validation outputs' and predictions' sizes do not match.")
+
+        rows = 1
+        if len_validation_outputs > 6:
+            rows = 3
+        elif len_validation_outputs >= 3:
+            rows = 2
+
+        columns = 1
+        if len_validation_outputs >= 5:
+            columns = 3
+        elif 1 < len_validation_outputs < 5:
+            columns = 2
+
+        standard_sampled_output_label = PlotValidator.standard_plot_param_analysis(len_sampled_outputs_labels)
+        standard_prediction_label = PlotValidator.standard_plot_param_analysis(len_prediction_labels)
+        standard_x_plot = PlotValidator.standard_plot_param_analysis(len_x_axis)
+
+        for i in range(len_validation_outputs):
+            title = PlotValidator.filter_titles_and_labels(i, titles, 'Plot ' + str(i + 1))
+
+            if standard_sampled_output_label:
+                sampled_output_label = sampled_outputs_labels[0]
+            else:
+                sampled_output_label = PlotValidator.filter_titles_and_labels(i, sampled_outputs_labels,
+                                                                              'Sampled output')
+
+            if standard_prediction_label:
+                prediction_label = prediction_labels[0]
+            else:
+                prediction_label = PlotValidator.filter_titles_and_labels(i, prediction_labels, 'Predicted output')
+
+            if standard_x_plot:
+                x_plot = x_axis[0]
+            else:
+                x_plot = x_axis[i]
+
+            plt.subplot(rows, columns, i + 1)
+            plt.title(title)
+            plt.plot(x_plot, sampled_outputs[i], label=sampled_output_label)
+            plt.plot(x_plot, predictions[i], label=prediction_label)
+            plt.legend()
+
+        plt.show()
+
+    def plot_validation_loss(self, model):
+        plt.figure(self.figure_count)
+        self.figure_count = self.figure_count + 1
+        plt.title('Epochs x Validation loss')
+        plt.plot([100 * j for j in range(len(model.validation_loss))], model.validation_loss)
+        plt.show()
+
+    @staticmethod
+    def standard_plot_param_analysis(len_param):
+        if len_param == 1:
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def filter_titles_and_labels(index, param_list, standard_text):
+        if len(param_list) > index:
+            if not param_list[index]:
+                return standard_text
+            else:
+                return param_list[index]
+        else:
+            return standard_text

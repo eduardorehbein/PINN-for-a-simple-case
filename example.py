@@ -1,54 +1,131 @@
 from pinn import CircuitPINN
+from validator import PlotValidator
+from normalizer import Normalizer
+import numpy as np
+from scipy.integrate import odeint
+import random
 
-import matplotlib.pyplot as plt
-import pandas as pd
-
-# Data reading
-df = pd.read_csv('./matlab/noisy_t_i_v_v7.csv')
-shuffled_df = df.sample(frac=1)
-
-# Train, test, validation split
-validation_v_steps = [3, 5, 12, 20]
-validation_df = df[df['v'].isin(validation_v_steps)]
-train_test_shuffled_df = shuffled_df[~shuffled_df.isin(validation_df)].dropna()
-
-# Setting u data (real) and f data (simulated)
-train_u_percent = 0.01
-u_data_len = int(train_u_percent * len(train_test_shuffled_df))
-u_df = train_test_shuffled_df.sample(n=u_data_len)
-f_df = train_test_shuffled_df[~train_test_shuffled_df.isin(u_df)].dropna()
-
-# Converting to numpy data
-np_u_t = u_df['t'].values
-np_u_v = u_df['v'].values
-np_u_i = u_df['noisy_i'].values
-np_noiseless_u_i = u_df['i'].values
-np_f_t = f_df['t'].values
-np_f_v = f_df['v'].values
-np_f_i = f_df['i'].values
-
-# PINN instancing
+# Circuit parameters
 R = 3
 L = 3
-hidden_layers = [9]
+
+# Setting train data
+random.seed(30)
+t = [0.01*j for j in range(701)]
+
+train_ics = [((-1) ** j) * 4 * random.random() for j in range(100)]
+train_vs = [((-1) ** j) * 20 * random.random() for j in range(len(train_ics))]
+
+random.shuffle(train_ics)
+random.shuffle(train_vs)
+
+np_train_u_t = np.zeros(len(train_ics))
+np_train_u_v = np.array(train_vs)
+np_train_u_ic = np.array(train_ics)
+
+np_train_f_t = None
+np_train_f_v = None
+np_train_f_ic = None
+
+np_t = np.array(t)
+for j in range(len(train_vs)):
+    np_ic = np.full((len(t),), train_ics[j])
+    np_v = np.full((len(t),), train_vs[j])
+
+    if np_train_f_t is None:
+        np_train_f_t = np_t
+    else:
+        np_train_f_t = np.append(np_train_f_t, np_t)
+    if np_train_f_v is None:
+        np_train_f_v = np_v
+    else:
+        np_train_f_v = np.append(np_train_f_v, np_v)
+    if np_train_f_ic is None:
+        np_train_f_ic = np_ic
+    else:
+        np_train_f_ic = np.append(np_train_f_ic, np_ic)
+
+# Normalizers
+t_normalizer = Normalizer()
+v_normalizer = Normalizer()
+i_normalizer = Normalizer()
+
+t_normalizer.parametrize(np_t)
+v_normalizer.parametrize(np.array(train_vs))
+i_normalizer.parametrize(np.array(train_ics))
+
+# Train data normalization
+np_norm_train_u_t = t_normalizer.normalize(np_train_u_t)
+np_norm_train_u_v = v_normalizer.normalize(np_train_u_v)
+np_norm_train_u_ic = i_normalizer.normalize(np_train_u_ic)
+
+np_norm_train_f_t = t_normalizer.normalize(np_train_f_t)
+np_norm_train_f_v = v_normalizer.normalize(np_train_f_v)
+np_norm_train_f_ic = i_normalizer.normalize(np_train_f_ic)
+
+# PINN instancing
+hidden_layers = [9, 9]
 learning_rate = 0.001
-model = CircuitPINN(R, L, hidden_layers, learning_rate)
 
-# PINN validation
-epochs = 15000
-model.train(np_u_t, np_u_v, np_u_i, np_f_t, np_f_v, epochs)
+# Model for normalized data
+model = CircuitPINN(R=R,
+                    L=L,
+                    hidden_layers=hidden_layers,
+                    learning_rate=learning_rate,
+                    t_normalizer=t_normalizer,
+                    v_normalizer=v_normalizer,
+                    i_normalizer=i_normalizer)
 
-for index, v_step in enumerate(validation_v_steps):
-    single_step_validation_df = validation_df[validation_df['v'] == v_step]
-    np_validation_t = single_step_validation_df['t'].values
-    np_validation_v = single_step_validation_df['v'].values
-    np_validation_i = single_step_validation_df['i'].values
-    np_prediction = model.predict(np_validation_t, np_validation_v)
+# Model for denormalized data
+# model = CircuitPINN(R=R, L=L, hidden_layers=hidden_layers, learning_rate=learning_rate)
 
-    plt.subplot(2, 2, index + 1)
-    plt.title('Sampled vs predicted i(t) for v(t) = ' + str(v_step) + 'D(t)')
-    plt.plot(np_validation_t, np_validation_i, label='Sampled i(t)')
-    plt.plot(np_validation_t, np_prediction, label='Predicted i(t)')
-    plt.legend()
+# PINN training
+max_epochs = 15000
+stop_loss = 0.0002
 
-plt.show()
+# Train with normalized data
+model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
+            np_norm_train_f_ic, max_epochs=max_epochs, stop_loss=stop_loss)
+
+# Train with denormalized data
+# model.train(np_train_u_t, np_train_u_v, np_train_u_ic, np_train_f_t, np_train_f_v, np_train_f_ic, epochs)
+
+# Setting test data
+test_vs = [10, 12, 7, 4, 8, 11, 13, -1, -6]
+test_ics = [((-1) ** j) * 4 * random.random() for j in range(len(test_vs))]
+
+sampled_outputs = []
+predictions = []
+titles = []
+
+np_norm_t = t_normalizer.normalize(np_t)
+for j in range(len(test_vs)):
+    test_v = test_vs[j]
+    test_ic = test_ics[j]
+
+    np_i = odeint(lambda i_t, time_t: (1/L) * test_v - (R / L) * i_t, test_ic, np_t)
+    sampled_outputs.append(np_i)
+
+    # PINN testing
+    np_ic = np.full((len(t),), test_ic)
+    np_v = np.full((len(t),), test_v)
+
+    np_norm_ic = i_normalizer.normalize(np_ic)
+    np_norm_v = v_normalizer.normalize(np_v)
+
+    # Test with normalized data
+    np_norm_prediction = model.predict(np_norm_t, np_norm_v, np_norm_ic)
+    np_prediction = i_normalizer.denormalize(np_norm_prediction)
+
+    # Test with denormalized data
+    # np_prediction = model.predict(np_t, np_v, np_ic)
+
+    predictions.append(np_prediction)
+
+    title = 'i0 = ' + str(round(test_ic, 3)) + ' A, v = ' + str(test_v) + ' V'
+    titles.append(title)
+
+# Results
+plotter = PlotValidator()
+plotter.multicompare([np_t], sampled_outputs, predictions, titles)
+plotter.plot_validation_loss(model)
