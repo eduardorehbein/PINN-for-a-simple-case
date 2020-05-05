@@ -6,7 +6,7 @@ clc
 R = 3;
 L = 3;
 
-simTime = 90;
+simTime = 91;
 simStepSize = 1e-2;
 
 noisePower = 1e-6;
@@ -20,4 +20,4 @@ data = [i.Time v.Data i.Data noisy_i.Data];
 headers = {'t', 'v', 'i', 'noisy_i'};
 T = array2table(data);
 T.Properties.VariableNames(1:4) = headers;
-writetable(T,'noisy_t_i_v_v6.csv');
+writetable(T,'noisy_t_i_v_v8.csv');

@@ -82,23 +82,28 @@ class CircuitCrossValidator:
 
 
 class PlotValidator:
+    def __init__(self):
+        self.figure_count = 1
 
-    @staticmethod
-    def compare(np_x_axis, np_validation_output, np_prediction, title='Sampled vs predicted output',
-                  validation_label='Sampled output', prediction_label='Predicted output'):
+    def compare(self, np_x_axis, np_sampled_output, np_prediction, title='Sampled vs predicted output',
+                sampled_output_label='Sampled output', prediction_label='Predicted output'):
+        plt.figure(self.figure_count)
+        self.figure_count = self.figure_count + 1
         plt.title(title)
-        plt.plot(np_x_axis, np_validation_output, label=validation_label)
+        plt.plot(np_x_axis, np_sampled_output, label=sampled_output_label)
         plt.plot(np_x_axis, np_prediction, label=prediction_label)
         plt.legend()
         plt.show()
 
-    @staticmethod
-    def multicompare(x_axis, validation_outputs, predictions, titles=None, validation_labels=None,
-                     prediction_labels=None):
+    def multicompare(self, x_axis, sampled_outputs, predictions, titles, sampled_outputs_labels=['Sampled output'],
+                     prediction_labels=['Predicted output']):
+        plt.figure(self.figure_count)
+        self.figure_count = self.figure_count + 1
+
         len_x_axis = len(x_axis)
-        len_validation_outputs = len(validation_outputs)
+        len_validation_outputs = len(sampled_outputs)
         len_predictions = len(predictions)
-        len_validation_labels = len(validation_labels)
+        len_sampled_outputs_labels = len(sampled_outputs_labels)
         len_prediction_labels = len(prediction_labels)
 
         if len_x_axis > 9 or len_validation_outputs > 9 or len_predictions > 9:
@@ -118,17 +123,18 @@ class PlotValidator:
         elif 1 < len_validation_outputs < 5:
             columns = 2
 
-        standard_validation_label = PlotValidator.standard_plot_param_analysis(len_validation_labels)
+        standard_sampled_output_label = PlotValidator.standard_plot_param_analysis(len_sampled_outputs_labels)
         standard_prediction_label = PlotValidator.standard_plot_param_analysis(len_prediction_labels)
         standard_x_plot = PlotValidator.standard_plot_param_analysis(len_x_axis)
 
         for i in range(len_validation_outputs):
             title = PlotValidator.filter_titles_and_labels(i, titles, 'Plot ' + str(i + 1))
 
-            if standard_validation_label:
-                validation_label = validation_labels[0]
+            if standard_sampled_output_label:
+                sampled_output_label = sampled_outputs_labels[0]
             else:
-                validation_label = PlotValidator.filter_titles_and_labels(i, validation_labels, 'Sampled output')
+                sampled_output_label = PlotValidator.filter_titles_and_labels(i, sampled_outputs_labels,
+                                                                              'Sampled output')
 
             if standard_prediction_label:
                 prediction_label = prediction_labels[0]
@@ -142,10 +148,17 @@ class PlotValidator:
 
             plt.subplot(rows, columns, i + 1)
             plt.title(title)
-            plt.plot(x_plot, validation_outputs[i], label=validation_label)
+            plt.plot(x_plot, sampled_outputs[i], label=sampled_output_label)
             plt.plot(x_plot, predictions[i], label=prediction_label)
             plt.legend()
 
+        plt.show()
+
+    def plot_validation_loss(self, model):
+        plt.figure(self.figure_count)
+        self.figure_count = self.figure_count + 1
+        plt.title('Epochs x Validation loss')
+        plt.plot([100 * j for j in range(len(model.validation_loss))], model.validation_loss)
         plt.show()
 
     @staticmethod

@@ -6,17 +6,20 @@ import numpy as np
 
 
 class CircuitPINN:
-    def __init__(self, R, L, hidden_layers, learning_rate, prediction_period, np_t_resolution, np_v_resolution):
+    def __init__(self, R, L, hidden_layers, learning_rate, t_normalizer=None, v_normalizer=None, i_normalizer=None):
         # Circuit parameters
         self.R = R  # Resistance
         self.L = L  # Inductance
 
-        # Network's prediction period, nn(t, v, ic) works for ts in [0, prediction period]
-        self.prediction_period = prediction_period
+        # Data normalizers
+        self.t_normalizer = t_normalizer
+        self.v_normalizer = v_normalizer
+        self.i_normalizer = i_normalizer
 
-        # Time and voltage signal resolution
-        self.np_t_resolution = np_t_resolution
-        self.np_v_resolution = np_v_resolution
+        if self.t_normalizer is None or self.v_normalizer is None or self.i_normalizer is None:
+            self.data_is_normalized = False
+        else:
+            self.data_is_normalized = True
 
         # Initialize NN
         self.layers = [3] + hidden_layers + [1]
@@ -24,7 +27,10 @@ class CircuitPINN:
         self.initial_weights, self.initial_biases = copy.deepcopy(self.weights), copy.deepcopy(self.biases)
 
         # Optimizer
-        self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
+        self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-07)
+
+        # Training loss
+        self.validation_loss = None
 
     def initialize_nn(self, layers):
         weights = []
@@ -46,20 +52,9 @@ class CircuitPINN:
         return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
 
     def predict(self, np_prediction_t, np_prediction_v, np_prediction_ic):
-        subsamples = self.slash_sample(np_prediction_t, np_prediction_v, append_ic=False, slash_on_v_change=True)
+        tf_x = tf.constant(np.array([np_prediction_t, np_prediction_v, np_prediction_ic]), dtype=tf.float32)
 
-        predictions = []
-        np_ic_value = np_prediction_ic
-        for subsample in subsamples:
-            t_and_v_tuple = [*zip(*subsample)]
-            np_ic = np.repeat(np_ic_value, len(t_and_v_tuple[0]))
-
-            tf_x = tf.constant(np.array([t_and_v_tuple[0], t_and_v_tuple[1], np_ic]), dtype=tf.float32)
-            np_nn = self.nn(tf_x).numpy()[0]
-            np_ic_value = np_nn[-1]
-            predictions.append(np_nn)
-
-        return np.concatenate(predictions)
+        return self.nn(tf_x).numpy()[0]
 
     def nn(self, tf_x):
         num_layers = len(self.weights) + 1
@@ -81,90 +76,96 @@ class CircuitPINN:
             tf_nn = self.nn(tf_x)
         tf_dnn_dx = gtf.gradient(tf_nn, tf_x)
         tf_dnn_dt = tf.slice(tf_dnn_dx, [0, 0], [1, tf_dnn_dx.shape[1]])
+        if self.data_is_normalized:
+            return (self.i_normalizer.std / self.t_normalizer.std) * tf_dnn_dt + \
+                   (self.R / self.L) * self.i_normalizer.denormalize(tf_nn) - \
+                   (1 / self.L) * self.v_normalizer.denormalize(tf_v)
+        else:
+            return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
 
-        return tf_dnn_dt + (self.R / self.L) * tf_nn - (1 / self.L) * tf_v
+    def train(self, np_u_t, np_u_v, np_u_ic, np_f_t, np_f_v, np_f_ic, max_epochs=10000, stop_loss=0.0005):
+        train_u_len = int(0.9 * len(np_u_t))
+        train_f_len = int(0.9 * len(np_f_t))
 
-    def train(self, np_train_t, np_train_v, np_train_ic, epochs=1):
-        subsamples = self.slash_sample(np_train_t, np_train_v, append_ic=True, slash_on_v_change=False)
+        # Train data
+        tf_train_u_x = tf.constant(
+            np.array([
+                np_u_t[:train_u_len],
+                np_u_v[:train_u_len],
+                np_u_ic[:train_u_len]]),
+            dtype=tf.float32)
+        tf_train_u_ic = tf.constant(np.array([np_u_ic[:train_u_len]]), dtype=tf.float32)
 
-        # for subsample in subsamples:  # TODO: Check it
-        #     if len(subsample) == 1:
-        #         subsamples.remove(subsample)
+        np_train_f_x = np.array([
+            np_f_t[:train_f_len],
+            np_f_v[:train_f_len],
+            np_f_ic[:train_f_len]
+        ])
+        np.random.shuffle(np.transpose(np_train_f_x))
 
-        tf_u_x = None
-        tf_u_x_for_ic_updating = None
-        tf_u_ic = tf.constant(np.array([np_train_ic]), dtype=tf.float32)
-        tf_f_x = None
-        tf_f_v = None
+        tf_train_f_x = tf.constant(np.array(np_train_f_x), dtype=tf.float32)
+        tf_train_f_v = tf.constant(np.array([np_train_f_x[1]]), dtype=tf.float32)
 
-        np_ic_value = np_train_ic
-        for subsample in subsamples:
-            t_and_v_tuple = [*zip(*subsample)]
-            np_ic = np.repeat(np_ic_value, len(t_and_v_tuple[0]))
+        # Validation data
+        tf_val_u_x = tf.constant(
+            np.array([
+                np_u_t[train_u_len:],
+                np_u_v[train_u_len:],
+                np_u_ic[train_u_len:]]),
+            dtype=tf.float32)
+        tf_val_u_ic = tf.constant(np.array([np_u_ic[train_u_len:]]), dtype=tf.float32)
 
-            tf_u_x_1 = tf.constant(np.array([[t_and_v_tuple[0][0]], [t_and_v_tuple[1][0]], [np_ic_value]]),
-                                     dtype=tf.float32)
-            if tf_u_x is None:
-                tf_u_x = tf_u_x_1
-            else:
-                tf_u_x = tf.concat([tf_u_x, tf_u_x_1], axis=1)
+        np_val_f_x = np.array([
+            np_f_t[train_f_len:],
+            np_f_v[train_f_len:],
+            np_f_ic[train_f_len:]
+        ])
+        np.random.shuffle(np.transpose(np_val_f_x))
 
-            np_f_x = np.array([t_and_v_tuple[0], t_and_v_tuple[1], np_ic])
-            tf_last_f_x = tf.transpose(tf.constant([np_f_x[:, -1]], dtype=tf.float32))
+        tf_val_f_x = tf.constant(np.array(np_val_f_x), dtype=tf.float32)
+        tf_val_f_v = tf.constant(np.array([np_val_f_x[1]]), dtype=tf.float32)
 
-            if tf_u_x_for_ic_updating is None:
-                tf_u_x_for_ic_updating = tf_last_f_x
-            elif subsample != subsamples[-1]:
-                tf_u_x_for_ic_updating = tf.concat([tf_u_x_for_ic_updating, tf_last_f_x], axis=1)
-
-            tf_ic_value = self.nn(tf_last_f_x)
-            if subsample != subsamples[-1]:
-                tf_u_ic = tf.concat([tf_u_ic, tf_ic_value], axis=1)
-            np_ic_value = tf_ic_value.numpy()[0]
-
-            np.random.shuffle(np.transpose(np_f_x))
-            tf_f_x_1 = tf.constant(np_f_x, dtype=tf.float32)
-            tf_f_v_1 = tf.constant([np_f_x[1]], dtype=tf.float32)
-
-            if tf_f_x is None or tf_f_v is None:
-                tf_f_x = tf_f_x_1
-                tf_f_v = tf_f_v_1
-            else:
-                tf_f_x = tf.concat([tf_f_x, tf_f_x_1], axis=1)
-                tf_f_v = tf.concat([tf_f_v, tf_f_v_1], axis=1)
-
-        for j in range(epochs):
+        # Training process
+        epoch = 0
+        tf_val_total_loss = tf.constant([1000], dtype=tf.float32)
+        tf_val_best_total_loss = copy.deepcopy(tf_val_total_loss)
+        best_weights = copy.deepcopy(self.weights)
+        best_biases = copy.deepcopy(self.biases)
+        loss_rising = False
+        self.validation_loss = []
+        while epoch < max_epochs and tf_val_total_loss > stop_loss and not loss_rising:
             # Gradients
-            grad_weights, grad_biases = self.get_grads(tf_u_x, tf_u_ic, tf_f_x, tf_f_v)
+            grad_weights, grad_biases = self.get_grads(tf_train_u_x, tf_train_u_ic, tf_train_f_x, tf_train_f_v)
 
             # Updating weights and biases
             grads = grad_weights + grad_biases
             vars_to_update = self.weights + self.biases
             self.optimizer.apply_gradients(zip(grads, vars_to_update))
-            tf_u_ic = tf.concat([tf.slice(tf_u_ic, [0, 0], [1, 1]), self.nn(tf_u_x_for_ic_updating)], axis=1)
 
-    def slash_sample(self, np_sample_t, np_sample_v, append_ic, slash_on_v_change):
-        subsamples = [[]]
-        np_last_transition_t = np_sample_t[0]
-        np_last_v = np_sample_v[0]
-        subsamples[-1].append((np.array(0), np_last_v))
-        for np_t, np_v in np.nditer([np_sample_t[1:], np_sample_v[1:]]):
-            np_t_mark = np.array(np_t - np_last_transition_t)
-            last_sample = subsamples[-1]
-            last_sample.append((np_t_mark, np_v))
-            if slash_on_v_change:
-                v_condition = np.abs(np_v - np_last_v) >= self.np_v_resolution / 2
-            else:
-                v_condition = False
-            if v_condition or np.abs(self.prediction_period - np_t_mark) <= self.np_t_resolution / 2:
-                np_last_v = np_v
-                np_last_transition_t = np_t
-                subsamples.append([])
-                if append_ic:
-                    last_sample = subsamples[-1]
-                    last_sample.append((np.array(0), np_v))
+            # Validation
+            tf_val_u_predict = self.nn(tf_val_u_x)
+            tf_val_u_loss = tf.reduce_mean(tf.square(tf_val_u_predict - tf_val_u_ic))
 
-        return subsamples
+            tf_val_f_predict = self.f(tf_val_f_x, tf_val_f_v)
+            tf_val_f_loss = tf.reduce_mean(tf.square(tf_val_f_predict))
+
+            tf_val_total_loss = tf_val_u_loss + tf_val_f_loss
+
+            if epoch % 100 == 0:
+                np_loss = tf_val_total_loss.numpy()
+                self.validation_loss.append(np_loss)
+                print('Validation loss on epoch ' + str(epoch) + ': ' + str(np_loss))
+                if tf_val_total_loss > tf_val_best_total_loss:
+                    loss_rising = True
+                else:
+                    tf_val_best_total_loss = copy.deepcopy(tf_val_total_loss)
+                    best_weights = copy.deepcopy(self.weights)
+                    best_biases = copy.deepcopy(self.biases)
+
+            epoch = epoch + 1
+        self.weights = best_weights
+        self.biases = best_biases
+        print('Validation loss at the training\'s end: ' + str(tf_val_total_loss.numpy()))
 
     def get_grads(self, tf_u_x, tf_u_ic, tf_f_x, tf_f_v):
         with tf.GradientTape(persistent=True) as gtu:
