@@ -1,4 +1,5 @@
 import copy
+from queue import Queue
 import tensorflow as tf
 import numpy as np
 
@@ -30,7 +31,7 @@ class CircuitPINN:
         self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-07)
 
         # Training loss
-        self.validation_loss = None
+        self.validation_loss = []
 
     def initialize_nn(self, layers):
         weights = []
@@ -127,12 +128,13 @@ class CircuitPINN:
 
         # Training process
         epoch = 0
-        tf_val_total_loss = tf.constant([1000], dtype=tf.float32)
+        tf_val_total_loss = tf.constant(1000, dtype=tf.float32)
         tf_val_best_total_loss = copy.deepcopy(tf_val_total_loss)
+        val_moving_average_queue = Queue(maxsize=100)
+        last_val_moving_average = tf_val_total_loss.numpy()
         best_weights = copy.deepcopy(self.weights)
         best_biases = copy.deepcopy(self.biases)
         loss_rising = False
-        self.validation_loss = []
         while epoch < max_epochs and tf_val_total_loss > stop_loss and not loss_rising:
             # Gradients
             grad_weights, grad_biases = self.get_grads(tf_train_u_x, tf_train_u_ic, tf_train_f_x, tf_train_f_v)
@@ -151,16 +153,25 @@ class CircuitPINN:
 
             tf_val_total_loss = tf_val_u_loss + tf_val_f_loss
 
+            if tf_val_total_loss < tf_val_best_total_loss:
+                tf_val_best_total_loss = copy.deepcopy(tf_val_total_loss)
+                best_weights = copy.deepcopy(self.weights)
+                best_biases = copy.deepcopy(self.biases)
+
+            if val_moving_average_queue.full():
+                val_moving_average_queue.get()
+            val_moving_average_queue.put(tf_val_total_loss.numpy())
+
             if epoch % 100 == 0:
                 np_loss = tf_val_total_loss.numpy()
                 self.validation_loss.append(np_loss)
                 print('Validation loss on epoch ' + str(epoch) + ': ' + str(np_loss))
-                if tf_val_total_loss > tf_val_best_total_loss:
+
+                val_moving_average = sum(val_moving_average_queue.queue) / val_moving_average_queue.qsize()
+                if val_moving_average > last_val_moving_average:
                     loss_rising = True
                 else:
-                    tf_val_best_total_loss = copy.deepcopy(tf_val_total_loss)
-                    best_weights = copy.deepcopy(self.weights)
-                    best_biases = copy.deepcopy(self.biases)
+                    last_val_moving_average = val_moving_average
 
             epoch = epoch + 1
         self.weights = best_weights
