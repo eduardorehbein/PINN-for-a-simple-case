@@ -130,7 +130,7 @@ class CircuitPINN:
         epoch = 0
         tf_val_total_loss = tf.constant(1000, dtype=tf.float32)
         tf_val_best_total_loss = copy.deepcopy(tf_val_total_loss)
-        val_moving_average_queue = Queue(maxsize=10)
+        val_moving_average_queue = Queue(maxsize=100)
         last_val_moving_average = tf_val_total_loss.numpy()
         best_weights = copy.deepcopy(self.weights)
         best_biases = copy.deepcopy(self.biases)
@@ -161,17 +161,17 @@ class CircuitPINN:
             if val_moving_average_queue.full():
                 val_moving_average_queue.get()
             val_moving_average_queue.put(tf_val_total_loss.numpy())
-            val_moving_average = sum(val_moving_average_queue.queue)/val_moving_average_queue.qsize()
-
-            if val_moving_average > last_val_moving_average:
-                loss_rising = True
-            else:
-                last_val_moving_average = val_moving_average
 
             if epoch % 100 == 0:
                 np_loss = tf_val_total_loss.numpy()
                 self.validation_loss.append(np_loss)
                 print('Validation loss on epoch ' + str(epoch) + ': ' + str(np_loss))
+
+                val_moving_average = sum(val_moving_average_queue.queue) / val_moving_average_queue.qsize()
+                if val_moving_average > last_val_moving_average:
+                    loss_rising = True
+                else:
+                    last_val_moving_average = val_moving_average
 
             epoch = epoch + 1
         self.weights = best_weights
