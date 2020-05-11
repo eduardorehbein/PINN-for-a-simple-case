@@ -25,7 +25,7 @@ class CircuitPINN:
         # Initialize NN
         self.layers = [3] + hidden_layers + [1]
         self.weights, self.biases = self.initialize_nn(self.layers)
-        self.initial_weights, self.initial_biases = copy.deepcopy(self.weights), copy.deepcopy(self.biases)
+        # self.initial_weights, self.initial_biases = copy.deepcopy(self.weights), copy.deepcopy(self.biases)
 
         # Optimizer
         self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-07)
