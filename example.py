@@ -1,5 +1,4 @@
 from pinn import CircuitPINN
-from validator import PlotValidator
 from normalizer import Normalizer
 import numpy as np
 from scipy.integrate import odeint
@@ -84,8 +83,8 @@ max_epochs = 15000
 stop_loss = 0.0002
 
 # Train with normalized data
-model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
-            np_norm_train_f_ic, max_epochs=max_epochs, stop_loss=stop_loss)
+# model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
+#             np_norm_train_f_ic, max_epochs=max_epochs, stop_loss=stop_loss)
 
 # Train with denormalized data
 # model.train(np_train_u_t, np_train_u_v, np_train_u_ic, np_train_f_t, np_train_f_v, np_train_f_ic, epochs)
@@ -96,14 +95,13 @@ test_ics = [((-1) ** j) * 4 * random.random() for j in range(len(test_vs))]
 
 sampled_outputs = []
 predictions = []
-titles = []
 
 np_norm_t = t_normalizer.normalize(np_t)
 for j in range(len(test_vs)):
     test_v = test_vs[j]
     test_ic = test_ics[j]
 
-    np_i = odeint(lambda i_t, time_t: (1/L) * test_v - (R / L) * i_t, test_ic, np_t)
+    np_i = np.transpose(odeint(lambda i_t, time_t: (1/L) * test_v - (R / L) * i_t, test_ic, np_t))[0]
     sampled_outputs.append(np_i)
 
     # PINN testing
@@ -122,10 +120,6 @@ for j in range(len(test_vs)):
 
     predictions.append(np_prediction)
 
-    title = 'i0 = ' + str(round(test_ic, 3)) + ' A, v = ' + str(test_v) + ' V'
-    titles.append(title)
-
-# Results
-plotter = PlotValidator()
-plotter.multicompare([np_t], sampled_outputs, predictions, titles)
-plotter.plot_validation_loss(model)
+# Print Results
+test_mse = (np.square(np.array(sampled_outputs) - np.array(predictions))).mean()
+print('Test MSE: ' + str(test_mse))
