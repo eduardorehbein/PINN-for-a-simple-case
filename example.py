@@ -83,8 +83,8 @@ max_epochs = 15000
 stop_loss = 0.0002
 
 # Train with normalized data
-# model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
-#             np_norm_train_f_ic, max_epochs=max_epochs, stop_loss=stop_loss)
+model.train(np_norm_train_u_t, np_norm_train_u_v, np_norm_train_u_ic, np_norm_train_f_t, np_norm_train_f_v,
+            np_norm_train_f_ic, max_epochs=max_epochs, stop_loss=stop_loss)
 
 # Train with denormalized data
 # model.train(np_train_u_t, np_train_u_v, np_train_u_ic, np_train_f_t, np_train_f_v, np_train_f_ic, epochs)
