@@ -10,10 +10,11 @@ L = 3
 
 # Setting train data
 random.seed(30)
-t = [0.01*j for j in range(701)]
+t = [1e-5 * j for j in range(701)]  # [1e-2 * j for j in range(701)]
 
-train_ics = [((-1) ** j) * 4 * random.random() for j in range(100)]
-train_vs = [((-1) ** j) * 20 * random.random() for j in range(len(train_ics))]
+train_points = 1000
+train_ics = [((-1) ** j) * 4 * random.random() for j in range(train_points)]
+train_vs = [((-1) ** j) * 20 * random.random() for j in range(train_points)]
 
 random.shuffle(train_ics)
 random.shuffle(train_vs)
