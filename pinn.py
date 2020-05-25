@@ -128,7 +128,7 @@ class CircuitPINN:
 
         # Training process
         epoch = 0
-        tf_val_total_loss = tf.constant(1000, dtype=tf.float32)
+        tf_val_total_loss = tf.constant(np.Inf, dtype=tf.float32)
         tf_val_best_total_loss = copy.deepcopy(tf_val_total_loss)
         val_moving_average_queue = Queue(maxsize=100)
         last_val_moving_average = tf_val_total_loss.numpy()
