@@ -12,16 +12,23 @@ L = 3
 random.seed(30)
 t = [1e-5 * j for j in range(701)]  # [1e-2 * j for j in range(701)]
 
-train_points = 1000
+train_points = 100
 train_ics = [((-1) ** j) * 4 * random.random() for j in range(train_points)]
 train_vs = [((-1) ** j) * 20 * random.random() for j in range(train_points)]
 
 random.shuffle(train_ics)
 random.shuffle(train_vs)
 
-np_train_u_t = np.zeros(len(train_ics))
-np_train_u_v = np.array(train_vs)
-np_train_u_ic = np.array(train_ics)
+extra_train_points = 1000 * train_points  # Extra initial condition data
+extra_train_ics = [((-1) ** j) * 4 * random.random() for j in range(extra_train_points)]
+extra_train_vs = [((-1) ** j) * 20 * random.random() for j in range(extra_train_points)]
+
+random.shuffle(extra_train_ics)
+random.shuffle(extra_train_vs)
+
+np_train_u_t = np.zeros(train_points + extra_train_points)
+np_train_u_v = np.array(train_vs + extra_train_vs)
+np_train_u_ic = np.array(train_ics + extra_train_ics)
 
 np_train_f_t = None
 np_train_f_v = None
@@ -44,6 +51,10 @@ for j in range(len(train_vs)):
         np_train_f_ic = np_ic
     else:
         np_train_f_ic = np.append(np_train_f_ic, np_ic)
+
+np_train_f_t = np.append(np_train_f_t, np.zeros(extra_train_points))
+np_train_f_v = np.append(np_train_f_v, np.array(extra_train_vs))
+np_train_f_ic = np.append(np_train_f_ic, np.array(extra_train_ics))
 
 # Normalizers
 t_normalizer = Normalizer()
@@ -80,7 +91,7 @@ model = CircuitPINN(R=R,
 # model = CircuitPINN(R=R, L=L, hidden_layers=hidden_layers, learning_rate=learning_rate)
 
 # PINN training
-max_epochs = 15000
+max_epochs = 30000
 stop_loss = 0.0002
 
 # Train with normalized data
