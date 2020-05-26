@@ -43,7 +43,7 @@ class CircuitCrossValidator:
             print('R2 for test set', index + 1, '->', r2)
             r2s_and_models.append((r2, copy.deepcopy(model)))
 
-            model.reset_NN()
+            model.reset_nn()
 
         self.print_correlation_analysis(r2s_and_models)
         return self.get_best_model(r2s_and_models)

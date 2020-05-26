@@ -141,6 +141,6 @@ class CircuitPINN:
 
         return grad_weights, grad_biases
 
-    def reset_NN(self):
+    def reset_nn(self):
         self.weights = copy.deepcopy(self.initial_weights)
         self.biases = copy.deepcopy(self.initial_biases)
